@@ -35,4 +35,17 @@ python -m pip install pyyaml
 * v0.2: remote sources (`remote:git@…`), JSONL export, richer scopes
 * v0.3: first-class adapters (Codex/Jules), coverage report per PR
 
+## Dev Setup
+
+To set up a consistent local Python dev environment with linting, typing, and tests:
+
+```bash
+make preflight    # creates .venv and installs dev tools
+make lint         # ruff (style/imports)
+make type         # mypy (static types)
+make test         # pytest (unit tests)
 ```
+
+Notes:
+- Tools run from `.venv` to ensure determinism across machines.
+- `make all` also runs an optional norm audit if present.
