@@ -11,7 +11,7 @@ import json
 import os
 import re
 import sys
-from typing import Any, Dict, List, Optional, NoReturn, cast
+from typing import Any, Dict, List, NoReturn, Optional, cast
 
 try:
     import yaml  # type: ignore
