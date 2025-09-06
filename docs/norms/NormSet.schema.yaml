@@ -14,6 +14,4 @@ properties:
       L1: { type: array }
       L2: { type: object }
       L3: { type: object }
-    additionalProperties: true
 additionalProperties: true
-
