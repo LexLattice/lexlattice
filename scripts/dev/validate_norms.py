@@ -24,9 +24,10 @@ def validate(path: Path) -> list[str]:
     except (FileNotFoundError, OSError) as e:
         return [f"cannot read {path}: {type(e).__name__}: {e}"]
 
-    if not re.search(r"^id:\s+\S+", txt, re.M):
+    # Accept optional leading spaces and inline comments after the key
+    if not re.search(r"(?m)^\s*id\s*:\s*\S+", txt):
         errs.append("missing `id:`")
-    if not re.search(r"^layers:\s*$", txt, re.M):
+    if not re.search(r"(?m)^\s*layers\s*:\s*", txt):
         errs.append("missing `layers:` block")
     return errs
 

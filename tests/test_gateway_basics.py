@@ -1,9 +1,3 @@
-import pathlib
-import sys
-
-# Ensure project root is on sys.path for imports when running with testpaths
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-
 from gateway import ASK_SIGNAL, STOP_SIGNAL, preflight, should_ask_stop
 
 
