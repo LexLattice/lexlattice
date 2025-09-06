@@ -1,0 +1,29 @@
+id: NormSet.base.v1
+extends: []
+layers:
+  L0:
+    - id: determinism.first
+      rule: "no wall-clock; fixed seeds"
+      enforce: hard
+  L1:
+    - id: exceptions.narrow
+      test: "ban blanket except"
+      enforce: hard
+    - id: io.guards
+      test: "guard file/DB IO; mark requires_db on DB codepaths"
+      enforce: hard
+  L2:
+    - id: dod.core
+      validators: [ruff, mypy, pytest, docs_updated]
+      enforce: gate
+  L3:
+    - id: journals
+      actions: [activity_report, self_assessment]
+      enforce: append
+metrics:
+  - NormPass@1
+  - RepairDepth
+  - ViolationMix
+  - DeterminismScore
+  - WaiverCount
+
