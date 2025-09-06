@@ -1,0 +1,31 @@
+
+# caches
+
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+**pycache**/
+
+# virtual envs
+
+.venv/
+venv/
+
+# IDE/OS
+
+.vscode/
+.idea/
+.DS_Store
+
+# local test artifacts (scratch)
+
+out*.txt
+stderr*.txt
+std*.txt
+*.noyaml.md
+Meta_waiver_test.yaml
+.tmp/
+temp/
+*.tmp
+*.log
+
