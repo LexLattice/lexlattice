@@ -10,6 +10,7 @@ Bundle = t.Dict[str, t.Any]
 
 ASK_SIGNAL = "ASK"
 STOP_SIGNAL = "STOP"
+CLI_GATES = {"ruff", "mypy", "pytest"}
 __all__ = [
     "load_bundle",
     "preflight",
@@ -26,22 +27,24 @@ def load_bundle(path: str | pathlib.Path) -> Bundle:
     return t.cast(Bundle, data)
 
 
-def preflight(bundle: Bundle) -> None:
-    """Enforce pre-run checks derived from L2 gates.
+def preflight(bundle: Bundle) -> dict[str, list[str]]:
+    """Check presence of CLI validators declared in the bundle (skip logical gates).
 
     Deterministic and side-effect-free: raises ValueError with actionable hints.
-    Relies exclusively on gates declared in the bundle (no hardcoded tools).
+    Returns a summary of checked gates.
     """
     gates = list(bundle.get("layers", {}).get("L2", {}).get("gates", []))
+    cli = [g for g in gates if g in CLI_GATES]
     missing: list[str] = []
     root = pathlib.Path(__file__).resolve().parents[1]
     venv_bin = root / ".venv" / "bin"
-    for tool in gates:
+    for tool in cli:
         present = shutil.which(tool) is not None or (venv_bin / tool).exists()
         if not present:
             missing.append(tool)
     if missing:
-        raise ValueError(f"Missing validators: {', '.join(missing)}. Install dev tools and retry.")
+        raise ValueError(f"Missing validators: {', '.join(missing)}")
+    return {"checked": cli, "missing": []}
 
 
 def mask_io(bundle: Bundle, *, requires_db: bool = False) -> None:

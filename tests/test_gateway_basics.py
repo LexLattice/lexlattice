@@ -4,12 +4,7 @@ import sys
 # Ensure project root is on sys.path for imports when running with testpaths
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from gateway.apply_bundle import (
-    ASK_SIGNAL,
-    STOP_SIGNAL,
-    preflight,
-    should_ask_stop,
-)
+from gateway import ASK_SIGNAL, STOP_SIGNAL, preflight, should_ask_stop
 
 
 def test_should_ask_stop_returns_constant() -> None:
@@ -25,12 +20,10 @@ def test_should_ask_stop_returns_constant() -> None:
 
 def test_preflight_checks_only_declared_gates() -> None:
     # No gates: should not raise
-    preflight({"layers": {"L2": {"gates": []}}})
+    assert preflight({"layers": {"L2": {"gates": []}}}) == {"checked": [], "missing": []}
 
-    # A clearly non-existent tool triggers a failure deterministically
-    try:
-        preflight({"layers": {"L2": {"gates": ["__definitely_missing_tool__"]}}})
-        raised = False
-    except ValueError:
-        raised = True
-    assert raised is True
+    # Non-CLI or logical gates should be ignored and not raise
+    assert preflight({"layers": {"L2": {"gates": ["__definitely_missing_tool__", "docs_updated"]}}}) == {
+        "checked": [],
+        "missing": [],
+    }

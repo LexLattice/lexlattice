@@ -25,8 +25,8 @@ def validate(path: Path) -> list[str]:
         return [f"cannot read {path}: {type(e).__name__}: {e}"]
 
     if not re.search(r"^id:\s+\S+", txt, re.M):
-        errs.append("missing top-level `id:`")
-    if "layers:" not in txt:
+        errs.append("missing `id:`")
+    if not re.search(r"^layers:\s*$", txt, re.M):
         errs.append("missing `layers:` block")
     return errs
 
