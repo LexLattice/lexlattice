@@ -11,6 +11,11 @@
 .venv/
 venv/
 
+# build artifacts
+
+dist/
+build/
+
 # IDE/OS
 
 .vscode/
@@ -28,4 +33,3 @@ Meta_waiver_test.yaml
 temp/
 *.tmp
 *.log
-
