@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# MIT License — see LICENSE in repo root
+# Copyright (c) 2025 LexLattice
 # LexLattice v0.1 — compile + enforce
 # Stdlib-only except optional PyYAML for nicer YAML parsing.
 
@@ -13,7 +15,7 @@ from typing import Any, Dict, List, Optional, NoReturn, cast
 
 try:
     import yaml  # type: ignore
-except Exception:  # noqa: E722
+except ImportError:
     yaml = None
 
 HERE = os.path.abspath(os.path.dirname(__file__))
@@ -36,10 +38,15 @@ def sha256(s: str) -> str:
 
 def load_yaml(s: str) -> Any:
     if yaml is not None:
-        return yaml.safe_load(s) or {}
+        try:
+            return yaml.safe_load(s) or {}
+        except Exception:
+            # Fall back to minimal parser on any YAML load error
+            pass
     # minimal fallback parser
     data: Dict[str, Any] = {}
     current_key: Optional[str] = None
+    current_item: Optional[Dict[str, Any]] = None
     for line in s.splitlines():
         if not line.strip():
             continue
@@ -52,22 +59,37 @@ def load_yaml(s: str) -> Any:
             if ":" in item_line:
                 k, v = item_line.split(":", 1)
                 lst = cast(List[Any], data[current_key])
-                lst.append({k.strip(): v.strip().strip('\"\'')})
+                current_item = {k.strip(): v.strip().strip('\"\'')}
+                lst.append(current_item)
                 data[current_key] = lst
             else:
                 lst = cast(List[Any], data[current_key])
                 lst.append(item_line.strip().strip('\"\''))
                 data[current_key] = lst
+                current_item = None
             continue
+        # Support continued mapping lines under the last list item
+        if (
+            current_key is not None
+            and isinstance(data.get(current_key), list)
+            and isinstance(current_item, dict)
+        ):
+            cont = re.match(r"^\s+([A-Za-z0-9_\-]+)\s*:\s*(.*)$", line)
+            if cont:
+                ck, cv = cont.group(1), cont.group(2)
+                current_item[ck] = cv.strip().strip('\"\'')
+                continue
         m = re.match(r"^([A-Za-z0-9_\-]+)\s*:\s*(.*)$", line)
         if m:
             k, v = m.group(1), m.group(2)
-            if v in ("", "{}", "[]"):
-                data[k] = [] if v == "[]" else {}
+            v_stripped = v.strip()
+            if v_stripped in ("", "[]", "{}"):
+                # Treat blank / [] as list (sufficient for our tiny schema)
+                data[k] = [] if v_stripped in ("", "[]") else {}
                 current_key = k
-            else:
-                data[k] = v.strip().strip('\"\'')
-                current_key = k
+                continue
+            data[k] = v_stripped.strip('\"\'')
+            current_key = k
     return data
 
 def load_meta(path: str) -> Dict[str, Any]:
@@ -123,7 +145,7 @@ def resolve_source(spec: str) -> str:
         return os.path.abspath(os.path.join(HERE, rel))
     die(f"Unsupported source scheme in '{spec}'. Only 'local:' is supported in v0.1.")
 
-def compile_rulebook(meta_path: str, out_path: str) -> Dict[str, Any]:
+def compile_rulebook(meta_path: str, out_path: str, stamp: bool = False) -> Dict[str, Any]:
     meta = load_meta(meta_path)
     layers = meta.get("layers", [])
     waivers = meta.get("waivers", [])
@@ -139,8 +161,8 @@ def compile_rulebook(meta_path: str, out_path: str) -> Dict[str, Any]:
         for r in parse_rules_from_markdown(src):
             r = dict(r)
             r["layer"] = lid
-            if r["severity"] == "advice" and severity_hint in ("hard","soft","advice"):
-                r["severity"] = r.get("severity", severity_hint) or severity_hint
+            sev = (r.get("severity") or severity_hint or "advice").lower()
+            r["severity"] = sev
             rid = r["id"]
             if rid in compiled:
                 curr = compiled[rid]
@@ -157,16 +179,21 @@ def compile_rulebook(meta_path: str, out_path: str) -> Dict[str, Any]:
     for w in waivers:
         try:
             wid = w["id"]
-            exp = w.get("expires")
+            expires = w.get("expires")
             active = True
-            if exp:
+            if expires:
                 try:
-                    active = today <= dt.date.fromisoformat(exp)
-                except Exception:
-                    active = True
+                    exp_date = dt.date.fromisoformat(str(expires))
+                    active = today <= exp_date
+                except ValueError:
+                    active = False
+                    print(
+                        f"[lexlattice] waiver '{w.get('id','?')}' has invalid expires; ignoring",
+                        file=sys.stderr,
+                    )
             if wid in compiled and active:
                 compiled[wid].setdefault("_waivers", []).append(w)
-        except Exception:
+        except (KeyError, TypeError):
             continue
 
     groups: Dict[str, List[Dict[str, Any]]] = {"hard": [], "soft": [], "advice": []}
@@ -176,13 +203,11 @@ def compile_rulebook(meta_path: str, out_path: str) -> Dict[str, Any]:
     for k in groups:
         groups[k].sort(key=lambda x: (x["layer"], x["id"]))
 
-    timestamp = dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     total = sum(len(v) for v in groups.values())
-    header = (
-        f"# Compiled Rulebook\n\nGenerated: {timestamp}\n\n"
-        f"Total rules: {total}  •  hard={len(groups['hard'])}  •  soft={len(groups['soft'])}  •  advice={len(groups['advice'])}\n\n"
-        "## Index by severity\n"
-    )
+    header = (f"# Compiled Rulebook\n\n" +
+              (f"Generated: {dt.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}\n\n" if stamp else "") +
+              f"Total rules: {total}  •  hard={len(groups['hard'])}  •  soft={len(groups['soft'])}  •  advice={len(groups['advice'])}\n\n" +
+              "## Index by severity\n")
     for sev in ("hard","soft","advice"):
         header += f"\n### {sev.upper()}\n"
         for r in groups[sev]:
@@ -193,7 +218,7 @@ def compile_rulebook(meta_path: str, out_path: str) -> Dict[str, Any]:
         parts.append(f"\n\n## {sev.upper()} RULES\n")
         for r in groups[sev]:
             parts.append(f"### {r['id']} — {r['title']}\n")
-            parts.append(f"- Severity: **{r['severity']}**  •  Layer: **{r['layer']}**  •  Scope: **{r['scope']}**\n")
+            parts.append(f"- Severity: **{r['severity']}**  •  Layer: **{r['layer']}**  •  Scope: `{r['scope']}`\n")
             if r.get("rationale"):
                 parts.append(f"- Rationale: {r['rationale']}\n")
             if r.get("checks"):
@@ -227,9 +252,10 @@ def main():
     ap.add_argument("--meta", default="Meta.yaml")
     ap.add_argument("--out", default="docs/agents/Compiled.Rulebook.md")
     ap.add_argument("--level", default="hard", choices=["hard","soft","advice"])
+    ap.add_argument("--stamp", action="store_true", help="Include timestamp in compiled output (off by default)")
     args = ap.parse_args()
     if args.command == "compile":
-        compile_rulebook(args.meta, args.out)
+        compile_rulebook(args.meta, args.out, stamp=bool(args.stamp))
     else:
         enforce(args.meta, args.level, args.out)
 

@@ -15,7 +15,7 @@ Different projects share the same bones. LexLattice makes those bones explicit a
 ```bash
 python3 urs.py compile --meta Meta.yaml --out docs/agents/Compiled.Rulebook.md
 python3 urs.py enforce --meta Meta.yaml --level hard
-````
+```
 
 If you see an error about PyYAML, install it:
 
@@ -35,4 +35,4 @@ python -m pip install pyyaml
 * v0.2: remote sources (`remote:git@…`), JSONL export, richer scopes
 * v0.3: first-class adapters (Codex/Jules), coverage report per PR
 
-````
+```
