@@ -1,0 +1,13 @@
+profile: default
+
+layers:
+  - id: L0
+    name: Universal Invariants
+    source: local:docs/urs/L0.md
+    severity: hard
+  - id: L4
+    name: "Agent Adapter: Codex"
+    source: local:examples/CodexAdapter.md
+    severity: advice
+
+waivers: []
