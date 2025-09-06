@@ -27,11 +27,11 @@ def load_bundle(path: str | pathlib.Path) -> Bundle:
     return t.cast(Bundle, data)
 
 
-def preflight(bundle: Bundle) -> dict[str, list[str]]:
+def preflight(bundle: Bundle) -> list[str]:
     """Check presence of CLI validators declared in the bundle (skip logical gates).
 
     Deterministic and side-effect-free: raises ValueError with actionable hints.
-    Returns a summary of checked gates.
+    Returns the list of checked tools on success.
     """
     gates = list(bundle.get("layers", {}).get("L2", {}).get("gates", []))
     cli = [g for g in gates if g in CLI_GATES]
@@ -43,8 +43,8 @@ def preflight(bundle: Bundle) -> dict[str, list[str]]:
         if not present:
             missing.append(tool)
     if missing:
-        raise ValueError(f"Missing validators: {', '.join(missing)}")
-    return {"checked": cli, "missing": []}
+        raise ValueError(f"Missing validators: {', '.join(missing)}. Install dev tools and retry.")
+    return cli
 
 
 def mask_io(bundle: Bundle, *, requires_db: bool = False) -> None:

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 from pathlib import Path
 
 
@@ -45,8 +46,8 @@ def main() -> int:
     errs = validate(target)
     if errs:
         for e in errs:
-            print(f"ERROR: {e}")
-        return 2
+            print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(2)
     print("OK")
     return 0
 
