@@ -200,9 +200,9 @@ def main() -> int:
         side = REPORTS_DIR / f"PR-{args.pr}.json"
         REPORTS_DIR.mkdir(parents=True, exist_ok=True)
         side.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-    except (OSError, TypeError, ValueError):
+    except (OSError, TypeError, ValueError) as e:
         # Non-fatal: journaling continues via markdown fallback
-        pass
+        print(f"Warning: failed to write audit JSON sidecar: {type(e).__name__}: {e}", file=sys.stderr)
 
     append_to_journal(args.pr, args.branch, md)
     return 0
