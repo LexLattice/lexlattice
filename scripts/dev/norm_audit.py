@@ -60,13 +60,13 @@ def docs_updated(pr_number: int, branch: str) -> bool:
         if code == 0 and out:
             base = out
     if base:
-        sh(["git", "fetch", "origin", base, "--depth=1"]))
+        sh(["git", "fetch", "origin", base, "--depth=1"])
         code, mb, _ = sh(["git", "merge-base", f"origin/{base}", "HEAD"])
         basepoint = mb if code == 0 and mb else f"origin/{base}"
         code, out, _ = sh(["git", "diff", "--name-only", basepoint, "HEAD"])
     else:
         guess = "main"
-        sh(["git", "fetch", "origin", guess, "--depth=1"]))
+        sh(["git", "fetch", "origin", guess, "--depth=1"])
         code, mb, _ = sh(["git", "merge-base", f"origin/{guess}", "HEAD"])
         basepoint = mb if code == 0 and mb else "HEAD~1"
         code, out, _ = sh(["git", "diff", "--name-only", basepoint, "HEAD"])
@@ -127,7 +127,9 @@ def append_to_journal(pr: int, branch: str, markdown: str) -> None:
         assert proc.stdin is not None
         proc.stdin.write(markdown)
         proc.stdin.close()
-        proc.wait(timeout=120)
+        rc = proc.wait(timeout=120)
+        if rc != 0:
+            raise subprocess.SubprocessError(f"codex_journal.py exited {rc}")
     except (OSError, ValueError, subprocess.SubprocessError, AssertionError):
         REPORTS_DIR.mkdir(parents=True, exist_ok=True)
         path = REPORTS_DIR / f"PR-{pr}.md"
@@ -191,4 +193,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
