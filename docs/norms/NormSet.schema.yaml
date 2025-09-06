@@ -1,0 +1,19 @@
+# Minimal schema sketch for NormSet files (human-readable, not enforced here)
+type: object
+required: [id, layers]
+properties:
+  id:
+    type: string
+  extends:
+    type: array
+    items: { type: string }
+  layers:
+    type: object
+    properties:
+      L0: { type: array }
+      L1: { type: array }
+      L2: { type: object }
+      L3: { type: object }
+    additionalProperties: true
+additionalProperties: true
+
