@@ -54,22 +54,30 @@ def read_normset_id(path: Path) -> str:
 
 
 def docs_updated(pr_number: int, branch: str) -> bool:
-    base = ""
+    """
+    Detect if README.md or docs/** changed vs base.
+    Strategy: try PR base via gh; else 'main'; else HEAD~1.
+    """
+    target = ""
     if pr_number > 0:
-        code, out, _ = sh(["gh", "pr", "view", str(pr_number), "--json", "baseRefName", "-q", ".baseRefName"])
+        code, out, err = sh(["gh", "pr", "view", str(pr_number),
+                             "--json", "baseRefName", "-q", ".baseRefName"])
         if code == 0 and out:
-            base = out
-    if base:
-        sh(["git", "fetch", "origin", base, "--depth=1"])
-        code, mb, _ = sh(["git", "merge-base", f"origin/{base}", "HEAD"])
-        basepoint = mb if code == 0 and mb else f"origin/{base}"
-        code, out, _ = sh(["git", "diff", "--name-only", basepoint, "HEAD"])
+            target = out
+        elif err:
+            print(f"Warning: gh pr view failed: {err}", file=sys.stderr)
+    target = target or "main"
+    code, _, err = sh(["git", "fetch", "origin", target, "--depth=1"])
+    if code != 0 and err:
+        print(f"Warning: git fetch for '{target}' failed: {err}", file=sys.stderr)
+    code, mb, _ = sh(["git", "merge-base", f"origin/{target}", "HEAD"])
+    if code == 0 and mb:
+        basepoint = mb
+    elif target:
+        basepoint = f"origin/{target}"
     else:
-        guess = "main"
-        sh(["git", "fetch", "origin", guess, "--depth=1"])
-        code, mb, _ = sh(["git", "merge-base", f"origin/{guess}", "HEAD"])
-        basepoint = mb if code == 0 and mb else "HEAD~1"
-        code, out, _ = sh(["git", "diff", "--name-only", basepoint, "HEAD"])
+        basepoint = "HEAD~1"
+    code, out, _ = sh(["git", "diff", "--name-only", basepoint, "HEAD"])
     if code != 0 or not out:
         return False
     files = [p.strip() for p in out.splitlines() if p.strip()]
@@ -101,19 +109,20 @@ def run_validator(cmd: List[str]) -> bool:
     return code == 0
 
 
-def determinism_score(payload: Dict[str, object], reruns: int) -> float:
+def determinism_score(gen, reruns: int) -> float:
+    """Measure stability of generation by re-running it."""
     if reruns <= 1:
         return 1.0
+    first = None
     stable = 0
-    ref_digest = None
     for _ in range(reruns):
-        blob = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
-        digest = hashlib.sha256(blob).hexdigest()
-        if ref_digest is None:
-            ref_digest = digest
+        payload = gen()
+        digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+        if first is None:
+            first = digest
             stable += 1
         else:
-            stable += int(digest == ref_digest)
+            stable += int(digest == first)
     return stable / reruns
 
 
@@ -145,45 +154,44 @@ def main() -> int:
     ap.add_argument("--branch", default="", help="Branch name")
     args = ap.parse_args()
 
-    normset_id = read_normset_id(NORMSET_PATH)
+    def generate_payload() -> Dict[str, object]:
+        normset_id = read_normset_id(NORMSET_PATH)
+        v_results: Dict[str, bool] = {
+            "ruff": run_validator(["ruff", "check"]),
+            "mypy": run_validator(["mypy"]),
+            "pytest": run_validator(["pytest", "-q"]),
+            "docs_updated": docs_updated(args.pr, args.branch),
+        }
+        normpass_at_1 = sum(1 for v in v_results.values() if v) / max(len(v_results), 1)
+        violations = scan_violation_mix(git_root())
+        l1_pass = len([v for v in violations if "scan_error" not in v]) == 0
+        conformance = {
+            "L0": "pass",
+            "L1": [f"exceptions.narrow:{'pass' if l1_pass else 'fail'}"],
+            "L2": [f"{k}:{'pass' if ok else 'fail'}" for k, ok in v_results.items()],
+            "L3": ["journals:append"],
+        }
+        return {
+            "normset": normset_id,
+            "conformance": conformance,
+            "metrics": {
+                "NormPass@1": normpass_at_1,
+                "RepairDepth": 0,
+                "ViolationMix": violations,
+                "WaiverCount": 0,
+            },
+            "notes": "",
+        }
 
-    v_results: Dict[str, bool] = {
-        "ruff": run_validator(["ruff", "check"]),
-        "mypy": run_validator(["mypy"]),
-        "pytest": run_validator(["pytest", "-q"]),
-        "docs_updated": docs_updated(args.pr, args.branch),
-    }
-    normpass_at_1 = sum(1 for v in v_results.values() if v) / max(len(v_results), 1)
-
-    violations = scan_violation_mix(git_root())
-    l1_pass = len([v for v in violations if "scan_error" not in v]) == 0
-
-    conformance = {
-        "L0": "pass",
-        "L1": ["exceptions.narrow:" + ("pass" if l1_pass else "fail")],
-        "L2": [f"{k}:{'pass' if ok else 'fail'}" for k, ok in v_results.items()],
-        "L3": ["journals:append"],
-    }
-
-    payload: Dict[str, object] = {
-        "normset": normset_id,
-        "conformance": conformance,
-        "metrics": {
-            "NormPass@1": normpass_at_1,
-            "RepairDepth": 0,
-            "ViolationMix": violations,
-            "WaiverCount": 0,
-        },
-        "notes": "",
-    }
+    payload = generate_payload()
     reruns = int(os.environ.get("NORM_AUDIT_RERUNS", "1"))
-    payload["metrics"]["DeterminismScore"] = determinism_score(payload, reruns)  # type: ignore[index]
+    payload["metrics"]["DeterminismScore"] = determinism_score(generate_payload, reruns)  # type: ignore[index]
 
     summary_lines = [
-        f"- NormSet: `{normset_id}`",
-        f"- L2 Validators: " + ", ".join(f"{k}={'pass' if v else 'fail'}" for k, v in v_results.items()),
-        f"- L1 Violations: {len(violations)}",
-        f"- Metrics: NormPass@1={normpass_at_1:.2f}, RepairDepth=0, DeterminismScore={payload['metrics']['DeterminismScore']:.2f}, WaiverCount=0",
+        f"- NormSet: `{payload['normset']}`",
+        f"- L2 Validators: " + ", ".join(payload['conformance']['L2']),
+        f"- L1 Violations: {len(payload['metrics']['ViolationMix'])}",
+        f"- Metrics: NormPass@1={payload['metrics']['NormPass@1']:.2f}, RepairDepth=0, DeterminismScore={payload['metrics']['DeterminismScore']:.2f}, WaiverCount=0",
     ]
     md = "## Norm Audit\n" + "\n".join(summary_lines) + "\n\n```json\n" + json.dumps(payload, indent=2, sort_keys=True) + "\n```\n"
 
