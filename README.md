@@ -40,7 +40,8 @@ python -m pip install pyyaml
 To set up a consistent local Python dev environment with linting, typing, and tests:
 
 ```bash
-make preflight    # creates .venv and installs dev tools
+make dev-install  # first step: create .venv and install dev tools
+make preflight    # optional: runs doctor if present
 make lint         # ruff (style/imports)
 make type         # mypy (static types)
 make test         # pytest (unit tests)
@@ -49,3 +50,4 @@ make test         # pytest (unit tests)
 Notes:
 - Tools run from `.venv` to ensure determinism across machines.
 - `make all` also runs an optional norm audit if present.
+ - Imports are auto-sortable with `ruff` (run `ruff check --fix`).
