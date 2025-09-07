@@ -6,6 +6,7 @@ Implements idempotent fixes for:
 - SIL-002: replace silent handler pass/continue with `raise`
 - MDA-003: mutable defaults → None + init
 - SUB-006: add check=True, text=True to subprocess.*; do not remove shell=True
+- ERR-011: link causal chain via `raise ... from e`
 - YAML-015: replace yaml.load with yaml.safe_load
 
 Uses ast to locate nodes and applies minimal text edits while preserving most
@@ -25,6 +26,7 @@ PACK_BEX = "BEX-001"
 PACK_SIL = "SIL-002"
 PACK_MDA = "MDA-003"
 PACK_SUB = "SUB-006"
+PACK_ERR = "ERR-011"
 PACK_YAML = "YAML-015"
 
 
@@ -296,11 +298,76 @@ def fix_yaml(src: str, path: str) -> Tuple[str, str]:
     return out, _unified_diff(path, src, out) if out != src else ""
 
 
+class Err011AddCause(cst.CSTTransformer):
+    def __init__(self) -> None:
+        self._aliases: List[str | None] = []
+        self._inner: List[int] = []
+
+    def visit_ExceptHandler(self, node: cst.ExceptHandler) -> None:  # noqa: D401
+        alias: str | None = None
+        nm = node.name
+        if nm is not None and isinstance(nm.name, cst.Name):
+            alias = nm.name.value
+        self._aliases.append(alias)
+        self._inner.append(0)
+
+    def leave_ExceptHandler(
+        self, original_node: cst.ExceptHandler, updated_node: cst.ExceptHandler
+    ) -> cst.ExceptHandler:
+        self._aliases.pop()
+        self._inner.pop()
+        return updated_node
+
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> None:  # noqa: D401
+        if self._inner:
+            self._inner[-1] += 1
+
+    def leave_FunctionDef(
+        self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
+    ) -> cst.FunctionDef:
+        if self._inner:
+            self._inner[-1] -= 1
+        return updated_node
+
+    def visit_ClassDef(self, node: cst.ClassDef) -> None:  # noqa: D401
+        if self._inner:
+            self._inner[-1] += 1
+
+    def leave_ClassDef(
+        self, original_node: cst.ClassDef, updated_node: cst.ClassDef
+    ) -> cst.ClassDef:
+        if self._inner:
+            self._inner[-1] -= 1
+        return updated_node
+
+    def leave_Raise(self, original_node: cst.Raise, updated_node: cst.Raise) -> cst.Raise:
+        if (
+            self._aliases
+            and self._aliases[-1]
+            and self._inner[-1] == 0
+            and original_node.exc is not None
+            and original_node.cause is None
+        ):
+            return updated_node.with_changes(cause=cst.From(item=cst.Name(self._aliases[-1])))
+        return updated_node
+
+
+def fix_err(src: str, path: str) -> Tuple[str, str]:
+    try:
+        mod = cst.parse_module(src)
+    except Exception:
+        return src, ""
+    new_mod = mod.visit(Err011AddCause())
+    out = new_mod.code
+    return out, _unified_diff(path, src, out) if out != src else ""
+
+
 FIXERS = [
     (PACK_BEX, fix_bex),
     (PACK_SIL, fix_sil),
     (PACK_MDA, fix_mda),
     (PACK_SUB, fix_sub),
+    (PACK_ERR, fix_err),
     (PACK_YAML, fix_yaml),
 ]
 

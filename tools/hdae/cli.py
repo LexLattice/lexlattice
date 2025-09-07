@@ -109,7 +109,7 @@ def _load_tf(path: str) -> Dict[str, Any]:
     try:
         return _load_yaml_minimal(_read(path)) or {}
     except (json.JSONDecodeError, KeyError, IndexError, ValueError, TypeError, OSError, subprocess.CalledProcessError) as e:
-        raise ValueError(f"failed to load YAML: {path}: {e}")
+        raise ValueError(f"failed to load YAML: {path}: {e}") from e
 
 
 def _type_name(x: Any) -> str:
@@ -287,13 +287,18 @@ def main(argv: List[str] | None = None) -> int:
         return 0
 
     if cmd.command in ("propose", "apply"):
-        from .scan import list_repo_py_files
+        from .scan import list_repo_py_files, scan_paths
         from .patch_cst import apply_all
 
         dry = bool(cmd.dry_run) or cmd.command == "propose"
         do_apply = bool(cmd.apply) or cmd.command == "apply"
         rc = 0
-        for p in list_repo_py_files("."):
+        files = list_repo_py_files(".")
+        if packs:
+            findings = scan_paths(files)
+            keep = {f.file for f in findings if f.pack in packs}
+            files = [f for f in files if f in keep]
+        for p in files:
             if os.path.relpath(p).startswith("tests/"):
                 continue
             try:
