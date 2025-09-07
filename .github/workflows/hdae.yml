@@ -20,13 +20,8 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: 'requirements-dev.txt'
-      - name: Install dev tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-      - name: Doctor (if present)
-        run: |
-          if [ -x scripts/dev/codex_session_doctor.sh ]; then scripts/dev/codex_session_doctor.sh --fix || true; fi
+      - name: Preflight
+        run: scripts/ci/hdae_ci.sh preflight
 
   hdae-run:
     runs-on: ubuntu-latest
@@ -40,50 +35,29 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: 'requirements-dev.txt'
-      - name: Install dev tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-      - name: Verify H-DAE setup
-        run: make hdae-verify
+      - name: Verify
+        run: scripts/ci/hdae_ci.sh verify
       - name: Scan
-        run: python -m tools.hdae.cli scan > hdae-scan.jsonl || true
-      - name: Gate on unwaived L1 (PR footprint)
-        id: gate
-        run: |
-          python tools/hdae/meta/gate_l1.py --pr "${{ github.event.pull_request.number }}" --base "${{ github.base_ref }}" | tee gate.json
+        run: scripts/ci/hdae_ci.sh scan
       - name: Propose (dry-run)
-        run: python -m tools.hdae.cli propose --dry-run > hdae-diff.txt || true
-      - name: Verify (ruff/mypy/pytest)
-        run: python -m tools.hdae.cli verify
+        run: scripts/ci/hdae_ci.sh propose-dry
+      - name: Gate on unwaived L1 (PR footprint)
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+        run: scripts/ci/hdae_ci.sh gate
+      - name: PR Comment
+        if: ${{ success() }}
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CI_ALLOW_PR_COMMENT: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/ci/hdae_ci.sh comment
+      - name: Collect artifacts
+        if: always()
+        run: scripts/ci/hdae_ci.sh artifacts
       - name: Archive artifacts
         uses: actions/upload-artifact@v4
         with:
           name: hdae-artifacts
-          path: |
-            hdae-scan.jsonl
-            hdae-diff.txt
-            docs/agents/waivers/**/*.md
-            gate.json
-      - name: Summarize in PR
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const pr = context.payload.pull_request?.number ?? context.issue.number;
-            const j = JSON.parse(fs.readFileSync('gate.json','utf8'));
-            const body = [
-              '### H-DAE Summary',
-              `- Findings (all scan): **${j.total_all}**`,
-              `- L1 in PR footprint (${j.gate_tf_ids.join(', ')}): **${j.l1_in_pr}**`,
-              `- Waivers (this PR): **${j.waivers}**`,
-              `- Remaining L1 (unwaived): **${j.remaining_l1}**`,
-              '',
-              `- Changed files: ${j.changed_files}`,
-              '',
-              '> L1 invariants outrank all else; unresolved L1 issues without waivers fail CI.',
-            ].join('\n');
-            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: pr, body });
-      - name: Enforce gate result
-        run: |
-          test "$(jq -r .remaining_l1 gate.json)" = "0"
+          path: .hdae-artifacts

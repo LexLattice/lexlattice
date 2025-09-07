@@ -84,3 +84,13 @@ hdae-ci: hdae-verify
 	$(VENV_DIR)/bin/python -m tools.hdae.cli scan > hdae-scan.jsonl || true
 	$(VENV_DIR)/bin/python -m tools.hdae.cli propose --dry-run > hdae-diff.txt || true
 	$(VENV_DIR)/bin/python -m tools.hdae.cli verify
+
+.PHONY: ci-local
+ci-local:
+	@PR_NUMBER?=0 BASE_REF?=main
+	@bash scripts/ci/hdae_ci.sh preflight
+	@bash scripts/ci/hdae_ci.sh verify
+	@PR_NUMBER=$(PR_NUMBER) BASE_REF=$(BASE_REF) bash scripts/ci/hdae_ci.sh scan
+	@bash scripts/ci/hdae_ci.sh propose-dry
+	@PR_NUMBER=$(PR_NUMBER) BASE_REF=$(BASE_REF) bash scripts/ci/hdae_ci.sh gate || true
+	@bash scripts/ci/hdae_ci.sh comment || true
