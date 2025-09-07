@@ -17,6 +17,16 @@ python3 urs.py compile --meta Meta.yaml --out docs/agents/Compiled.Rulebook.md
 python3 urs.py enforce --meta Meta.yaml --level hard
 ```
 
+## Bundle & Audit (60s)
+Emit a deterministic bundle (JSON) + append an NDJSON audit line for PR #1:
+```bash
+make compile
+make audit PR=1
+```
+
+* `docs/bundles/base.llbundle.json` is canonical JSON (no timestamps), with a `hash` computed over the content.
+* `docs/audit/PR-1.ndjson` gets an append-only event line for traceability.
+
 If you see an error about PyYAML, install it:
 
 ```bash
