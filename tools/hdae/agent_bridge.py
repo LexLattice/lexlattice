@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import glob
 from dataclasses import dataclass
 import logging
 from typing import Any, Dict, Iterable, List, Tuple
@@ -17,6 +18,15 @@ from .verify import run_verify
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
 LOG = logging.getLogger(__name__)
+
+SUGGEST_PACKS = {
+    "SQL-007",
+    "TYP-009",
+    "ROL-012",
+    "IOB-013",
+    "CPL-017",
+    "DUP-018",
+}
 
 
 @dataclass
@@ -72,6 +82,54 @@ def _load_tf_index() -> Dict[str, Dict[str, Any]]:
         if tf_id:
             idx[tf_id] = tf
     return idx
+
+
+def emit(findings: Iterable[Dict[str, Any]], packs: set[str] | None = None) -> List[str]:
+    """Emit task packets for suggest-only packs.
+
+    Returns list of written file paths.
+    """
+    out_dir = os.path.join(ROOT, ".hdae", "tasks")
+    _ensure_dir(out_dir)
+
+    allowed = SUGGEST_PACKS if packs is None else {p for p in packs if p in SUGGEST_PACKS}
+
+    # Clean existing packets for these packs
+    for p in allowed:
+        for exist in glob.glob(os.path.join(out_dir, f"{p}-*.json")):
+            try:
+                os.remove(exist)
+            except OSError:
+                pass
+
+    tf_index = _load_tf_index()
+    counts: Dict[str, int] = {p: 0 for p in allowed}
+    written: List[str] = []
+    for f in sorted(findings, key=lambda d: (
+        str(d.get("pack") or d.get("tf_id") or ""),
+        str(d.get("file", "")),
+        int(d.get("line", 0)),
+    )):
+        pack = str(f.get("pack") or f.get("tf_id") or "")
+        if pack not in allowed:
+            continue
+        counts[pack] = counts.get(pack, 0) + 1
+        path = os.path.join(out_dir, f"{pack}-{counts[pack]:03d}.json")
+        tf = tf_index.get(pack, {})
+        L = tf.get("L", {}) if isinstance(tf, dict) else {}
+        actions = [str(t) for t in L.get("transforms", [])] if isinstance(L, dict) else []
+        data = {
+            "tf_id": pack,
+            "file": str(f.get("file", "")),
+            "line": int(f.get("line", 0)),
+            "message": str(f.get("message", "")),
+            "hints": [str(h) for h in f.get("hint_tokens", [])],
+            "proposed_actions": actions,
+        }
+        with open(path, "w", encoding="utf-8") as fp:
+            json.dump(data, fp, ensure_ascii=False)
+        written.append(path)
+    return sorted(written)
 
 
 def _is_ambiguous_finding(f: Dict[str, Any]) -> bool:
@@ -173,24 +231,44 @@ def ingest_diffs(from_dir: str) -> Dict[str, int]:
     - If verify fails, emit a waiver file under docs/agents/waivers/PR-<N>.md
     Returns a summary dict: {accepted: n, waived: m}
     """
-    # Collect diff texts
-    diffs: List[str] = []
-    for name in sorted(os.listdir(from_dir)):
-        if not name.endswith(('.diff', '.patch', '.txt')):
-            continue
-        p = os.path.join(from_dir, name)
-        try:
-            diffs.append(_read(p))
-        except OSError:
-            raise
-    if not diffs:
+    # Collect diff texts recursively
+    all_diffs: List[str] = []
+    apply_diffs: List[str] = []
+    new_files: List[Tuple[str, str]] = []  # (relpath, content)
+    for base, dirs, files in os.walk(from_dir):
+        dirs.sort()
+        for name in sorted(files):
+            if not name.endswith((".diff", ".patch")):
+                continue
+            path = os.path.join(base, name)
+            text = _read(path)
+            all_diffs.append(text)
+            if "--- /dev/null" in text:
+                m = re.search(r"^\+\+\+\s+b/(.+)$", text, re.MULTILINE)
+                if m:
+                    rel = m.group(1).strip()
+                    added: List[str] = []
+                    in_hunk = False
+                    for line in text.splitlines():
+                        if line.startswith("@@"):
+                            if in_hunk:
+                                break
+                            in_hunk = True
+                            continue
+                        if in_hunk and line.startswith("+") and not line.startswith("+++"):
+                            added.append(line[1:])
+                    content = "\n".join(added)
+                    if content and not content.endswith("\n"):
+                        content += "\n"
+                    new_files.append((rel, content))
+                    continue
+            apply_diffs.append(text)
+    if not all_diffs:
         return {"accepted": 0, "waived": 0}
 
     # Prepare worktree
     with tempfile.TemporaryDirectory(prefix="hdae-wt-") as tmp:
-        # ensure tmp exists and is clean dir
         _git("worktree", "add", "--detach", tmp, "HEAD")
-        # Overlay any uncommitted changes from the working tree so verification reflects current code
         try:
             changed = subprocess.run(["git", "diff", "--name-only"], cwd=ROOT, check=True, text=True, capture_output=True)
             for rel in [p for p in changed.stdout.splitlines() if p.strip()]:
@@ -206,18 +284,22 @@ def ingest_diffs(from_dir: str) -> Dict[str, int]:
         except subprocess.CalledProcessError as e:
             LOG.debug("agent_bridge: listing uncommitted changes failed: %s", e)
         try:
-            ok, _log = _apply_patches_in(tmp, diffs)
+            # materialize new files in worktree
+            for rel, content in new_files:
+                dst = os.path.join(tmp, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                with open(dst, "w", encoding="utf-8") as fp:
+                    fp.write(content)
+            ok, _log = _apply_patches_in(tmp, apply_diffs)
             if not ok:
-                _waive_for_diffs(diffs, reason="patch apply failed in worktree")
+                _waive_for_diffs(all_diffs, reason="patch apply failed in worktree")
                 _git("worktree", "remove", "--force", tmp)
                 return {"accepted": 0, "waived": 1}
-            # Run verify (skip nested pytest if configured). Prefer project venv python.
             vpy = os.path.join(ROOT, ".venv", "bin", "python")
             old_py = os.environ.get("HDAE_PY")
             old_scope = os.environ.get("HDAE_VERIFY_SCOPE")
             if os.path.exists(vpy):
                 os.environ["HDAE_PY"] = vpy
-            # During nested verify, focus on tools only to avoid local uncommitted test changes
             os.environ["HDAE_VERIFY_SCOPE"] = "tools"
             ok, _verify_out = run_verify(cwd=tmp)
             if old_py is None:
@@ -229,14 +311,27 @@ def ingest_diffs(from_dir: str) -> Dict[str, int]:
             else:
                 os.environ["HDAE_VERIFY_SCOPE"] = old_scope
             if ok:
-                accepted = _accept_into_main(diffs)
+                accepted = 0
+                for rel, content in new_files:
+                    dst = os.path.join(ROOT, rel)
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    current: str | None = None
+                    try:
+                        with open(dst, "r", encoding="utf-8") as fp:
+                            current = fp.read()
+                    except OSError:
+                        current = None
+                    if current != content:
+                        with open(dst, "w", encoding="utf-8") as fp:
+                            fp.write(content)
+                        accepted += 1
+                accepted += _accept_into_main(apply_diffs)
                 _git("worktree", "remove", "--force", tmp)
                 return {"accepted": accepted, "waived": 0}
-            _waive_for_diffs(diffs, reason="verify failed")
+            _waive_for_diffs(all_diffs, reason="verify failed")
             _git("worktree", "remove", "--force", tmp)
             return {"accepted": 0, "waived": 1}
         finally:
-            # In case worktree remove failed, ensure tmp is gone
             try:
                 shutil.rmtree(tmp, ignore_errors=True)
             except OSError as e:

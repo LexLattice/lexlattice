@@ -326,18 +326,23 @@ def main(argv: List[str] | None = None) -> int:
         ag.add_argument("--packs", default=cmd.packs or "", help="Suggest-only packs to include")
         args = ag.parse_args(rest)
         if args.sub == "emit":
-            from .scan import list_repo_py_files, scan_paths
-            from .agent_bridge import emit_tasks
+            from .agent_bridge import emit as emit_packets
 
-            files = list_repo_py_files(".")
-            finding_dicts = [f.__dict__ for f in scan_paths(files)]
+            data: List[Dict[str, Any]] = []
+            for line in sys.stdin:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
             only: set[str] | None = None
             if args.packs:
                 only = {p.strip() for p in args.packs.split(',') if p.strip()}
-            if only is not None:
-                finding_dicts = [f for f in finding_dicts if str(f.get('pack') or f.get('tf_id')) in only]
-            written = emit_tasks(finding_dicts)
-            print("\n".join(written))
+            written = emit_packets(data, only)
+            if written:
+                print("\n".join(written))
             return 0
         if args.sub == "ingest":
             from .agent_bridge import ingest_diffs
