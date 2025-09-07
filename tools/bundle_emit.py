@@ -26,7 +26,7 @@ yaml: Any = None
 try:
     import yaml as _yaml  # type: ignore
     yaml = _yaml
-except Exception:  # pragma: no cover - fallback used if PyYAML absent
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - fallback used if PyYAML absent
     yaml = None  # fallback parser below
 
 FRONT_MAT_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?", re.S | re.M)
@@ -56,6 +56,15 @@ def die(msg: str, code: int = 1) -> NoReturn:
 
 
 def load_yaml(s: str) -> Any:
+    """
+    YAML loader with optional PyYAML and a tiny stdlib fallback.
+    Fallback supports ONLY:
+      - top-level mapping (str keys)
+      - scalar values
+      - lists of scalars
+      - lists of flat mappings (str->scalar)
+    It does NOT support nested mappings or multi-line scalars.
+    """
     if yaml is not None:
         return yaml.safe_load(s)  # type: ignore[no-any-return]
     # minimal fallback parser (covers Meta.yaml shape used here)
@@ -103,6 +112,24 @@ def load_yaml(s: str) -> Any:
     return data
 
 
+def validate_meta_shape(meta: Dict[str, Any]) -> None:
+    # Fail fast if Meta.yaml uses unsupported shapes.
+    if not isinstance(meta, dict):
+        die("Meta.yaml must be a mapping")
+    layers = meta.get("layers", [])
+    waivers = meta.get("waivers", [])
+    if not isinstance(layers, list):
+        die("Meta.yaml: 'layers' must be a list")
+    for i, lay in enumerate(layers):
+        if not isinstance(lay, dict) or "id" not in lay or "source" not in lay:
+            die(f"Meta.yaml: layer[{i}] must be a mapping with 'id' and 'source'")
+    if not isinstance(waivers, list):
+        die("Meta.yaml: 'waivers' must be a list")
+    for i, w in enumerate(waivers):
+        if not isinstance(w, dict) or "id" not in w:
+            die(f"Meta.yaml: waiver[{i}] must be a mapping with 'id'")
+
+
 def resolve_source(spec: str) -> str:
     if spec.startswith("local:"):
         rel = spec.split(":", 1)[1]
@@ -114,14 +141,9 @@ def resolve_source(spec: str) -> str:
 def load_meta(meta_path: str) -> Dict[str, Any]:
     try:
         meta = load_yaml(read(meta_path)) or {}
-        if not isinstance(meta, dict):
-            die("Meta.yaml must be a mapping")
+        validate_meta_shape(meta)
         layers = meta.get("layers") or []
         waivers = meta.get("waivers") or []
-        if not isinstance(layers, list):
-            die("Meta.yaml: 'layers' must be a list")
-        if not isinstance(waivers, list):
-            die("Meta.yaml: 'waivers' must be a list")
         meta["layers"], meta["waivers"] = layers, waivers
         return meta
     except FileNotFoundError:

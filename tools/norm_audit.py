@@ -16,7 +16,7 @@ from typing import Any, Dict
 
 
 def utc_now_iso() -> str:
-    return dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def write_line(path: str, obj: Dict[str, Any]) -> None:

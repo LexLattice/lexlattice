@@ -46,5 +46,5 @@ emit-bundle: compile
 ensure-dirs:
 	mkdir -p docs/agents docs/bundles docs/audit
 
-compile: ensure-dirs
+compile: ensure-dirs dev-install
 	$(VENV_DIR)/bin/python urs.py compile --meta Meta.yaml --out docs/agents/Compiled.Rulebook.md --json-out docs/bundles/base.llbundle.json
