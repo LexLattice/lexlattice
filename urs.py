@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 from typing import Any, Dict, List, NoReturn, Optional, cast
 
@@ -251,11 +252,26 @@ def main():
     ap.add_argument("command", choices=["compile","enforce"])
     ap.add_argument("--meta", default="Meta.yaml")
     ap.add_argument("--out", default="docs/agents/Compiled.Rulebook.md")
+    ap.add_argument("--json-out", default=None, help="Optional: also emit JSON bundle to this path")
     ap.add_argument("--level", default="hard", choices=["hard","soft","advice"])
     ap.add_argument("--stamp", action="store_true", help="Include timestamp in compiled output (off by default)")
     args = ap.parse_args()
     if args.command == "compile":
         compile_rulebook(args.meta, args.out, stamp=bool(args.stamp))
+        if args.json_out:
+            # Call the bundle emitter (stdlib-only).
+            tool_id = f"lexlattice/urs@{hashlib.sha256(read(__file__).encode('utf-8')).hexdigest()[:12]}"
+            cmd = [
+                sys.executable,
+                "tools/bundle_emit.py",
+                "--meta",
+                args.meta,
+                "--out",
+                args.json_out,
+                "--tool",
+                tool_id,
+            ]
+            subprocess.check_call(cmd)
     else:
         enforce(args.meta, args.level, args.out)
 
