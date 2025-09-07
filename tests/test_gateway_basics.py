@@ -31,7 +31,8 @@ def test_preflight_missing_cli_tool_raises(monkeypatch) -> None:
     orig_exists = ab.pathlib.Path.exists
 
     def fake_exists(self):  # type: ignore[no-redef]
-        if self.name in {"ruff", "mypy", "pytest"} and self.parent.name == "bin" and self.parent.parent.name == ".venv":
+        # Mirror gateway.apply_bundle’s executable gates to avoid test drift
+        if self.name in ab.CLI_GATES and self.parent.name == "bin" and self.parent.parent.name == ".venv":
             return False
         return orig_exists(self)
 
