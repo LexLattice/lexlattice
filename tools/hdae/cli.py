@@ -300,7 +300,7 @@ def main(argv: List[str] | None = None) -> int:
                 s = _read(p)
             except OSError:
                 raise
-            new, diffs = apply_all(s, p)
+            new, diffs = apply_all(s, p, packs)
             if diffs:
                 for d in diffs:
                     if dry:
