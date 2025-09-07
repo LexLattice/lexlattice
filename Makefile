@@ -55,13 +55,14 @@ compile: ensure-dirs dev-install
 hdae-verify: dev-install
 	$(VENV_DIR)/bin/python -m tools.hdae.meta.quality --selftest
 	$(VENV_DIR)/bin/python -m tools.hdae.cli scan
+	$(VENV_DIR)/bin/python -m tools.hdae.cli verify
 	@echo "TF schema OK"
 
 journals-template:
 	@# Emit activity/self-assessment journal entries when PR context is present
 	@if [ -x scripts/dev/auto_journals.sh ]; then scripts/dev/auto_journals.sh || true; else echo "journal helper not found"; fi
 
-.PHONY: hdae-scan hdae-propose hdae-apply
+.PHONY: hdae-scan hdae-propose hdae-apply hdae-agent-emit hdae-agent-ingest
 
 hdae-scan: dev-install
 	$(VENV_DIR)/bin/python -m tools.hdae.cli scan
@@ -71,3 +72,9 @@ hdae-propose: dev-install
 
 hdae-apply: dev-install
 	$(VENV_DIR)/bin/python -m tools.hdae.cli apply && $(VENV_DIR)/bin/python -m tools.hdae.cli verify
+
+hdae-agent-emit: dev-install
+	$(VENV_DIR)/bin/python -m tools.hdae.cli agent emit
+
+hdae-agent-ingest: dev-install
+	$(VENV_DIR)/bin/python -m tools.hdae.cli agent ingest --from .hdae/diffs

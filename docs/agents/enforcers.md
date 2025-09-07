@@ -21,6 +21,13 @@ Descriptions:
 ## Waivers → Rulebook
 Waivers are defined in `Meta.yaml` under the `waivers:` list. The Rulebook compiler (`urs.py`) merges active waivers into the compiled output, and an index appears under each affected rule. For discoverability, waiver notes and rationale are mirrored at `docs/agents/waivers/`.
 
+## Agent Bridge & Waivers
+When deterministic auto-fixes are unsafe or ambiguous, the Agent Bridge can package sites for an external agent and then verify proposed diffs deterministically:
+- emit: `hdae agent emit` writes JSON task packets under `.hdae/tasks/` for ambiguous findings (e.g., SUB-006 with `shell=True`). Each packet includes the TF id, code frame, allowed transforms, decision rule, and hints.
+- ingest: `hdae agent ingest --from <dir>` applies one or more unified diffs in a temporary worktree, runs `ruff + mypy + pytest`, and if verification passes, applies them to the main tree idempotently. If verification fails, a waiver note is appended to `docs/agents/waivers/PR-<n>.md`.
+
+Lifecycle: scan → propose(auto) → agent(emit/ingest) → verify → commit | waiver.
+
 ## Determinism & DoD
 - L0/L1/L2 precedence applies: L0 (determinism) > L1 (IDE invariants) > L2 (DoD gates).
 - No wall-clock or RNG branching in this pipeline.

@@ -1,0 +1,10 @@
+diff --git a/tools/hdae/verify.py b/tools/hdae/verify.py
+--- a/tools/hdae/verify.py
++++ b/tools/hdae/verify.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
+ import os
+ import subprocess
+ import sys
++def broken(

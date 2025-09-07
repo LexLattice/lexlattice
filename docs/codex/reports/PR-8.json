@@ -1,0 +1,29 @@
+{
+  "conformance": {
+    "L0": "pass",
+    "L1": [
+      "exceptions.narrow:fail"
+    ],
+    "L2": [
+      "ruff:fail",
+      "mypy:fail",
+      "pytest:fail",
+      "docs_updated:pass"
+    ],
+    "L3": [
+      "journals:append"
+    ]
+  },
+  "metrics": {
+    "DeterminismScore": 1.0,
+    "NormPass@1": 0.25,
+    "RepairDepth": 0,
+    "ViolationMix": [
+      "/home/rose/lexlattice/scripts/dev/norm_audit.py: except Exception",
+      "/home/rose/lexlattice/scripts/dev/norm_audit.py: except BaseException"
+    ],
+    "WaiverCount": 0
+  },
+  "normset": "NormSet.base.v1",
+  "notes": ""
+}
