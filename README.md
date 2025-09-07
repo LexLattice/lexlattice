@@ -65,3 +65,15 @@ This repo includes the skeleton for Hybrid Deterministic + Agent Enforcers:
 ```bash
 make hdae-verify
 ```
+Run detectors and patchers for the core four packs:
+
+```bash
+# list findings (JSONL)
+make hdae-scan
+
+# preview diffs without changing files
+make hdae-propose
+
+# apply fixes and verify with ruff + mypy + pytest
+make hdae-apply
+```

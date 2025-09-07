@@ -22,7 +22,7 @@ lint: dev-install
 	$(VENV_DIR)/bin/ruff check
 
 type: dev-install
-	$(VENV_DIR)/bin/mypy .
+	$(VENV_DIR)/bin/mypy --explicit-package-bases .
 
 test: dev-install
 	$(VENV_DIR)/bin/pytest -q
@@ -60,3 +60,14 @@ hdae-verify: dev-install
 journals-template:
 	@# Emit activity/self-assessment journal entries when PR context is present
 	@if [ -x scripts/dev/auto_journals.sh ]; then scripts/dev/auto_journals.sh || true; else echo "journal helper not found"; fi
+
+.PHONY: hdae-scan hdae-propose hdae-apply
+
+hdae-scan: dev-install
+	$(VENV_DIR)/bin/python -m tools.hdae.cli scan
+
+hdae-propose: dev-install
+	$(VENV_DIR)/bin/python -m tools.hdae.cli propose --dry-run
+
+hdae-apply: dev-install
+	$(VENV_DIR)/bin/python -m tools.hdae.cli apply && $(VENV_DIR)/bin/python -m tools.hdae.cli verify
