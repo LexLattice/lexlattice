@@ -243,12 +243,20 @@ def main(argv: List[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="hdae",
         description=(
-            "H-DAE CLI skeleton (L1/L2 tie into Rulebook/DoD). "
-            "Subcommands are placeholders; see PR-2 for detectors/patchers."
+            "H-DAE CLI (scan/propose/apply/verify/agent). "
+            "Deterministic, stdlib-only tooling."
         ),
     )
-    ap.add_argument("command", choices=["scan", "propose", "apply", "verify"], help="Pipeline stage")
-    cmd = ap.parse_args(argv).command
+    ap.add_argument(
+        "command",
+        choices=["scan", "propose", "apply", "verify", "agent"],
+        help="Pipeline stage",
+    )
+    ap.add_argument("--packs", default="", help="Comma-separated TF ids to include")
+    ap.add_argument("--dry-run", action="store_true", help="For propose: print unified diffs")
+    ap.add_argument("--apply", action="store_true", help="For propose: apply patches in-place")
+    # Parse known args to allow agent subcommands
+    cmd, rest = ap.parse_known_args(argv)
 
     # Always validate TFs for any subcommand
     tfs = _load_all_tfs()
@@ -262,8 +270,81 @@ def main(argv: List[str] | None = None) -> int:
         print("\n".join(errors))
         return 2
 
-    print(f"Loaded {len(tfs)} TF(s): schema OK")
-    print(f"{cmd}: NYI; see PR-2")
+    packs: set[str] | None = None
+    if cmd.packs:
+        packs = {p.strip() for p in cmd.packs.split(",") if p.strip()}
+
+    if cmd.command == "scan":
+        from .scan import list_repo_py_files, scan_paths
+
+        files = list_repo_py_files(".")
+        findings = scan_paths(files)
+        for f in findings:
+            if packs and getattr(f, "pack", getattr(f, "tf_id", "")) not in packs:
+                continue
+            print(f.to_json())
+        return 0
+
+    if cmd.command in ("propose", "apply"):
+        from .scan import list_repo_py_files
+        from .patch_cst import apply_all
+
+        dry = bool(cmd.dry_run) or cmd.command == "propose"
+        do_apply = bool(cmd.apply) or cmd.command == "apply"
+        rc = 0
+        for p in list_repo_py_files("."):
+            if os.path.relpath(p).startswith("tests/"):
+                continue
+            try:
+                s = _read(p)
+            except OSError:
+                raise
+            new, diffs = apply_all(s, p, packs)
+            if diffs:
+                for d in diffs:
+                    if dry:
+                        print(d, end="")
+                if do_apply:
+                    with open(p, "w", encoding="utf-8") as fp:
+                        fp.write(new)
+                rc = rc or 0
+        return rc
+
+    if cmd.command == "verify":
+        from .verify import run_verify
+
+        ok, out = run_verify(cwd=None)
+        if out:
+            print(out)
+        return 0 if ok else 1
+
+    if cmd.command == "agent":
+        ag = argparse.ArgumentParser(prog="hdae agent", description="Agent bridge commands")
+        ag.add_argument("sub", choices=["emit", "ingest"], help="Agent action")
+        ag.add_argument("--from", dest="from_dir", default=".hdae/diffs", help="Ingest diffs from dir")
+        ag.add_argument("--packs", default=cmd.packs or "", help="Suggest-only packs to include")
+        args = ag.parse_args(rest)
+        if args.sub == "emit":
+            from .scan import list_repo_py_files, scan_paths
+            from .agent_bridge import emit_tasks
+
+            files = list_repo_py_files(".")
+            finding_dicts = [f.__dict__ for f in scan_paths(files)]
+            only: set[str] | None = None
+            if args.packs:
+                only = {p.strip() for p in args.packs.split(',') if p.strip()}
+            if only is not None:
+                finding_dicts = [f for f in finding_dicts if str(f.get('pack') or f.get('tf_id')) in only]
+            written = emit_tasks(finding_dicts)
+            print("\n".join(written))
+            return 0
+        if args.sub == "ingest":
+            from .agent_bridge import ingest_diffs
+
+            res = ingest_diffs(args.from_dir)
+            print(json.dumps(res))
+            return 0
+
     return 0
 
 

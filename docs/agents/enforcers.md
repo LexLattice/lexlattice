@@ -31,3 +31,10 @@ Waivers are defined in `Meta.yaml` under the `waivers:` list. The Rulebook compi
 - Wire CI enforcement and agent bridge.
 - Expand schema and verification hooks as needed.
 
+## Pack Coverage v0.2
+- Auto-fix: RES-005, ARG-008, LOG-010, ERR-011, PATH-014, YAML-015, JSON-016
+- Detect-only (agent): SQL-007, TYP-009, ROL-012, IOB-013, CPL-017, DUP-018
+
+CLI filtering examples:
+- `python -m tools.hdae.cli scan --packs RES-005,ARG-008`
+- `python -m tools.hdae.cli propose --dry-run --packs RES-005,ARG-008`

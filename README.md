@@ -31,7 +31,7 @@ python -m pip install pyyaml
 * `examples/CodexAdapter.md` – example L4 adapter (advice)
 * `docs/agents/EOL-of-Coding.md` – E–O–L spec (operators, lattice, TF calculus)
 * `docs/agents/enforcers.md` – H-DAE pipeline overview
-* `tools/hdae/` – H-DAE skeleton (CLI, schema, TFs)
+* `tools/hdae/` – H-DAE tooling (CLI, scan/patch/verify, TFs)
 
 ## Roadmap
 
@@ -64,4 +64,6 @@ This repo includes the skeleton for Hybrid Deterministic + Agent Enforcers:
 
 ```bash
 make hdae-verify
+python -m tools.hdae.cli scan --packs RES-005,ARG-008
+python -m tools.hdae.cli propose --dry-run --packs RES-005,ARG-008
 ```

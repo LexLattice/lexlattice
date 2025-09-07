@@ -22,7 +22,7 @@ lint: dev-install
 	$(VENV_DIR)/bin/ruff check
 
 type: dev-install
-	$(VENV_DIR)/bin/mypy .
+	$(VENV_DIR)/bin/mypy --explicit-package-bases .
 
 test: dev-install
 	$(VENV_DIR)/bin/pytest -q
@@ -50,7 +50,7 @@ compile: ensure-dirs dev-install
 	$(VENV_DIR)/bin/python urs.py compile --meta Meta.yaml --out docs/agents/Compiled.Rulebook.md --json-out docs/bundles/base.llbundle.json
 
 # --- H-DAE ---
-.PHONY: hdae-verify journals-template
+.PHONY: hdae-verify journals-template hdae-scan hdae-propose hdae-apply hdae-ci
 
 hdae-verify: dev-install
 	$(VENV_DIR)/bin/python -m tools.hdae.meta.quality --selftest
@@ -60,3 +60,19 @@ hdae-verify: dev-install
 journals-template:
 	@# Emit activity/self-assessment journal entries when PR context is present
 	@if [ -x scripts/dev/auto_journals.sh ]; then scripts/dev/auto_journals.sh || true; else echo "journal helper not found"; fi
+
+PACKS ?=
+
+hdae-scan: dev-install
+	$(VENV_DIR)/bin/python -m tools.hdae.cli scan --packs "$(PACKS)"
+
+hdae-propose: dev-install
+	$(VENV_DIR)/bin/python -m tools.hdae.cli propose --dry-run --packs "$(PACKS)"
+
+hdae-apply: dev-install
+	$(VENV_DIR)/bin/python -m tools.hdae.cli apply --packs "$(PACKS)" && $(VENV_DIR)/bin/python -m tools.hdae.cli verify
+
+hdae-ci: hdae-verify
+	$(VENV_DIR)/bin/python -m tools.hdae.cli scan --packs "$(PACKS)" > hdae-scan.jsonl || true
+	$(VENV_DIR)/bin/python -m tools.hdae.cli propose --dry-run --packs "$(PACKS)" > hdae-diff.txt || true
+	$(VENV_DIR)/bin/python -m tools.hdae.cli verify

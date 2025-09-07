@@ -1,0 +1,1 @@
+{"tf_id": "SQL-007", "file": "/tmp/pytest-of-rose/pytest-37/test_emit_for_suggest_only0/x.py", "lineno": 3, "code_frame": "def do()", "allowed_transforms": ["refactor", "extract-function", "rewrite"], "decision_rule": "preserve behavior; reduce risk; parametrize inputs", "hints": ["execute"]}
