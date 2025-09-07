@@ -51,7 +51,7 @@ def test_gate_all_waived(tmp_path: Path) -> None:
     code, data = _run_gate(tmp_path, changed, scan, pr=99, waiver_text=waiver)
     assert code == 0
     assert data.get('l1_in_pr') == 3
-    assert data.get('waivers') >= 3
+    assert int(data.get('waivers', 0)) >= 3
     assert data.get('remaining_l1') == 0
 
 
