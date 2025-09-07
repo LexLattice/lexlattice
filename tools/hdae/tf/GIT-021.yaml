@@ -1,0 +1,37 @@
+tf_id: GIT-021
+name: Git hygiene
+status: stub
+meta:
+  severity: low
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "large binaries committed"
+  hints:
+    - "Use LFS or ignore"
+  confidence: 0.5
+O:
+  entities:
+    - repo
+  relations:
+    - blob-size
+  scope: repo
+L:
+  constraints:
+    - "No huge blobs"
+  transforms:
+    - "Add .gitignore/LFS"
+  decision_rule: "Propose"
+IO:
+  input:
+    - repo
+  output:
+    - report
+verify:
+  checks:
+    - audit
+links:
+  related:
+    - URS-L0-SEC-002
+

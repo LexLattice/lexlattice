@@ -1,0 +1,37 @@
+tf_id: PRJ-020
+name: Project metadata completeness
+status: stub
+meta:
+  severity: low
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "missing LICENSE headers"
+  hints:
+    - "Ensure headers present"
+  confidence: 0.5
+O:
+  entities:
+    - source:file
+  relations:
+    - license-header
+  scope: repo
+L:
+  constraints:
+    - "Headers required"
+  transforms:
+    - "Propose header adds"
+  decision_rule: "Propose"
+IO:
+  input:
+    - repo
+  output:
+    - proposal
+verify:
+  checks:
+    - lint
+links:
+  related:
+    - URS-L0-LIC-001
+

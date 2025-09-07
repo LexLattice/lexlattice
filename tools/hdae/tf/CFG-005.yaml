@@ -1,0 +1,37 @@
+tf_id: CFG-005
+name: Config determinism
+status: stub
+meta:
+  severity: medium
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "env-dependent defaults"
+  hints:
+    - "Pin defaults; allow override via flags"
+  confidence: 0.75
+O:
+  entities:
+    - config:file
+  relations:
+    - env-branch
+  scope: path:**/*
+L:
+  constraints:
+    - "No implicit env branching"
+  transforms:
+    - "Introduce explicit flags"
+  decision_rule: "Propose when env lookup without guard"
+IO:
+  input:
+    - repo
+  output:
+    - proposal
+verify:
+  checks:
+    - "docs mention flags"
+links:
+  related:
+    - "L0: Determinism"
+

@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lexlattice.local/schema/tf.schema.json",
+  "title": "H-DAE Task Function (TF)",
+  "type": "object",
+  "required": [
+    "tf_id",
+    "name",
+    "meta",
+    "E",
+    "O",
+    "L",
+    "IO",
+    "verify",
+    "links"
+  ],
+  "properties": {
+    "tf_id": { "type": "string" },
+    "name": { "type": "string" },
+    "status": { "type": "string", "enum": ["active", "stub", "disabled"] },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "severity": { "type": "string", "enum": ["low", "medium", "high"] },
+        "auto": { "type": "boolean" },
+        "detect": { "type": "boolean" }
+      },
+      "required": ["severity", "auto", "detect"],
+      "additionalProperties": true
+    },
+    "E": {
+      "type": "object",
+      "properties": {
+        "detect_signals": { "type": "array", "items": { "type": "string" } },
+        "hints": { "type": "array", "items": { "type": "string" } },
+        "confidence": { "type": "number" }
+      },
+      "required": ["detect_signals", "hints", "confidence"],
+      "additionalProperties": true
+    },
+    "O": {
+      "type": "object",
+      "properties": {
+        "entities": { "type": "array", "items": { "type": "string" } },
+        "relations": { "type": "array", "items": { "type": "string" } },
+        "scope": { "type": "string" }
+      },
+      "required": ["entities", "relations", "scope"],
+      "additionalProperties": true
+    },
+    "L": {
+      "type": "object",
+      "properties": {
+        "constraints": { "type": "array", "items": { "type": "string" } },
+        "transforms": { "type": "array", "items": { "type": "string" } },
+        "decision_rule": { "type": "string" }
+      },
+      "required": ["constraints", "transforms", "decision_rule"],
+      "additionalProperties": true
+    },
+    "IO": {
+      "type": "object",
+      "properties": {
+        "input": { "type": "array", "items": { "type": "string" } },
+        "output": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["input", "output"],
+      "additionalProperties": true
+    },
+    "verify": {
+      "type": "object",
+      "properties": {
+        "checks": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["checks"],
+      "additionalProperties": true
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "related": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["related"],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
+

@@ -29,6 +29,9 @@ python -m pip install pyyaml
 * `Meta.yaml` – layer manifest + waivers
 * `docs/urs/L0.md` – tiny universal L0 (“hard” rules)
 * `examples/CodexAdapter.md` – example L4 adapter (advice)
+* `docs/agents/EOL-of-Coding.md` – E–O–L spec (operators, lattice, TF calculus)
+* `docs/agents/enforcers.md` – H-DAE pipeline overview
+* `tools/hdae/` – H-DAE skeleton (CLI, schema, TFs)
 
 ## Roadmap
 
@@ -51,3 +54,14 @@ Notes:
 - Tools run from `.venv` to ensure determinism across machines.
 - `make all` also runs an optional norm audit if present.
  - Imports are auto-sortable with `ruff` (run `ruff check --fix`).
+
+## Agent Enforcers (H-DAE)
+
+This repo includes the skeleton for Hybrid Deterministic + Agent Enforcers:
+- Read the spec: `docs/agents/EOL-of-Coding.md`
+- See pipeline details: `docs/agents/enforcers.md`
+- Validate TFs and run lattice self-test:
+
+```bash
+make hdae-verify
+```

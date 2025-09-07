@@ -1,0 +1,42 @@
+tf_id: MDA-003
+name: Module determinism audit
+status: active
+meta:
+  severity: high
+  auto: true
+  detect: true
+E:
+  detect_signals:
+    - "use of random without seeding"
+    - "datetime.now/time.time in logic"
+  hints:
+    - "Inject seed and pin sources"
+    - "Avoid wall-clock branches"
+  confidence: 0.92
+O:
+  entities:
+    - python:file
+  relations:
+    - contains-nondeterminism
+  scope: path:**/*.py
+L:
+  constraints:
+    - "No wall-clock or RNG nondeterminism"
+  transforms:
+    - "Refactor to accept seed/clock as parameters"
+  decision_rule: "Apply when refactor preserves behavior under fixed seed"
+IO:
+  input:
+    - codebase
+  output:
+    - patch
+verify:
+  checks:
+    - ruff passes
+    - mypy passes
+    - pytest passes
+links:
+  related:
+    - "L0: Determinism first"
+    - URS-L0-DET-001
+

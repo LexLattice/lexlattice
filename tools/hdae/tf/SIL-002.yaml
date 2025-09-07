@@ -1,0 +1,42 @@
+tf_id: SIL-002
+name: Surface silent failures
+status: active
+meta:
+  severity: medium
+  auto: true
+  detect: true
+E:
+  detect_signals:
+    - "pass in except block"
+    - "logging at level DEBUG in error path"
+  hints:
+    - "Replace silent 'pass' with explicit handling"
+    - "Elevate log level or propagate error"
+  confidence: 0.9
+O:
+  entities:
+    - python:file
+  relations:
+    - contains-silent-handler
+  scope: path:**/*.py
+L:
+  constraints:
+    - "Error paths must not silently ignore failures"
+  transforms:
+    - "Replace pass with raise/log-and-raise"
+  decision_rule: "Apply when a safe non-silent alternative is available"
+IO:
+  input:
+    - codebase
+  output:
+    - patch
+verify:
+  checks:
+    - ruff passes
+    - mypy passes
+    - pytest passes
+links:
+  related:
+    - "L1: Codex IDE invariants"
+    - URS-L0-DET-001
+

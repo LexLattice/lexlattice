@@ -1,0 +1,37 @@
+tf_id: ARG-014
+name: Argparse completeness
+status: stub
+meta:
+  severity: low
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "argparse without choices"
+  hints:
+    - "Add choices= for enums"
+  confidence: 0.6
+O:
+  entities:
+    - python:file
+  relations:
+    - argparse-api
+  scope: path:**/*.py
+L:
+  constraints:
+    - "Provide choices for enums"
+  transforms:
+    - "Add choices lists"
+  decision_rule: "Propose"
+IO:
+  input:
+    - codebase
+  output:
+    - proposal
+verify:
+  checks:
+    - mypy
+links:
+  related:
+    - "L1: CLI invariants"
+

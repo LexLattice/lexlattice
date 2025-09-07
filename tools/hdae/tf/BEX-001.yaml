@@ -1,0 +1,43 @@
+tf_id: BEX-001
+name: Ban blanket except Exception
+status: active
+meta:
+  severity: high
+  auto: true
+  detect: true
+E:
+  detect_signals:
+    - "except Exception:"
+    - "bare except:"
+  hints:
+    - "Narrow to specific exception types"
+    - "Avoid swallowing errors; add logging or re-raise"
+  confidence: 0.95
+O:
+  entities:
+    - python:file
+  relations:
+    - contains-blanket-except
+  scope: path:**/*.py
+L:
+  constraints:
+    - "No blanket `except Exception` or bare `except`"
+  transforms:
+    - "Suggest specific exception types"
+    - "Add logging or re-raise"
+  decision_rule: "Apply when specific exception types are identifiable and patch is small"
+IO:
+  input:
+    - codebase
+  output:
+    - patch
+verify:
+  checks:
+    - ruff passes
+    - mypy passes
+    - pytest passes
+links:
+  related:
+    - "L1: ban blanket except"
+    - URS-L0-DET-001
+

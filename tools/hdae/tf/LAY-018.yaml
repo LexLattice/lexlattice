@@ -1,0 +1,37 @@
+tf_id: LAY-018
+name: Layer annotations present
+status: stub
+meta:
+  severity: low
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "missing layer annotations"
+  hints:
+    - "Add L0/L1/L2 notes"
+  confidence: 0.5
+O:
+  entities:
+    - docs:file
+  relations:
+    - layer-annotation
+  scope: repo
+L:
+  constraints:
+    - "Docs reference layers"
+  transforms:
+    - "Propose notes"
+  decision_rule: "Propose"
+IO:
+  input:
+    - docs
+  output:
+    - proposal
+verify:
+  checks:
+    - review
+links:
+  related:
+    - "L1/L2 references"
+
