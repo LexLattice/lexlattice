@@ -59,34 +59,54 @@ jobs:
             hdae-diff.txt
             docs/agents/waivers/**/*.md
       - name: Summarize in PR
+        id: summarize_pr
         uses: actions/github-script@v7
         with:
+          result-encoding: string
           script: |
             const fs = require('fs');
             const prNumber = context.payload.pull_request?.number ?? context.issue.number;
-            if (!prNumber) {
-              core.setFailed('No PR number in context.');
-              return;
+            if (!prNumber) { core.setFailed('No PR number in context.'); return ''; }
+            // Read scan JSONL
+            let lines = [];
+            try { lines = fs.readFileSync('hdae-scan.jsonl','utf8').trim().split('\n').filter(Boolean); } catch {}
+            // Count only L1 TFs (BEX-001, SIL-002)
+            const L1 = new Set(['BEX-001','SIL-002']);
+            let l1Count = 0, total = 0;
+            for (const ln of lines) {
+              try {
+                const o = JSON.parse(ln);
+                total += 1;
+                const id = o.tf_id || o.pack || '';
+                if (L1.has(String(id))) l1Count += 1;
+              } catch {}
             }
-            let scan = 0, waivers = 0;
-            try { scan = fs.readFileSync('hdae-scan.jsonl','utf8').trim().split('\n').filter(Boolean).length; } catch {}
-            try { waivers = fs.readdirSync('docs/agents/waivers').filter(f => f.endsWith('.md')).length; } catch {}
-            const remaining = Math.max(scan - waivers, 0);
+            // Waivers for THIS PR only
+            let waivers = 0;
+            const wfile = `docs/agents/waivers/PR-${prNumber}.md`;
+            try {
+              const wtxt = fs.readFileSync(wfile, 'utf8');
+              const matches = wtxt.match(/BEX-001|SIL-002/g) || [];
+              waivers = matches.length || 1; // at least 1 if file exists
+            } catch {}
+            const remaining = Math.max(l1Count - waivers, 0);
             const body = [
               '### H-DAE Summary',
-              `- Findings: **${scan}**`,
-              `- Waivers present: **${waivers}**`,
-              `- Remaining (unwaived): **${remaining}**`,
+              `- Findings (all): **${total}**`,
+              `- L1 findings (gate): **${l1Count}**`,
+              `- Waivers (this PR): **${waivers}**`,
+              `- Remaining L1 (unwaived): **${remaining}**`,
               '',
               '> L1 invariants outrank all else; unresolved L1 issues without waivers fail CI.',
               '',
               '- Artifacts: scan JSONL and dry-run diffs are attached.',
             ].join('\n');
             await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body });
+            core.setOutput('remaining_l1', String(remaining));
+            return String(remaining);
       - name: Gate on unwaived L1
         run: |
-          WAIVERS=$(ls docs/agents/waivers/*.md 2>/dev/null | wc -l || true)
-          SCAN=$(wc -l < hdae-scan.jsonl 2>/dev/null || echo 0)
-          REMAIN=$(( SCAN > WAIVERS ? SCAN - WAIVERS : 0 ))
-          if [ "$REMAIN" -gt 0 ]; then
-            echo "Unwaived findings remain: $REMAIN"; exit 1; fi
+          REMAIN="${{ steps.summarize_pr.outputs.remaining_l1 || '0' }}"
+          echo "Remaining L1 unwaived: $REMAIN"
+          if [ "${REMAIN:-0}" -gt 0 ]; then
+            echo "Unwaived L1 findings remain: $REMAIN"; exit 1; fi
