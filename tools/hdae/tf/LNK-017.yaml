@@ -1,0 +1,37 @@
+tf_id: LNK-017
+name: Link hygiene in docs
+status: stub
+meta:
+  severity: low
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "dead links"
+  hints:
+    - "Fix or remove dead links"
+  confidence: 0.5
+O:
+  entities:
+    - docs:file
+  relations:
+    - link-check
+  scope: path:**/*.md
+L:
+  constraints:
+    - "Docs links should resolve"
+  transforms:
+    - "Propose fixes"
+  decision_rule: "Propose"
+IO:
+  input:
+    - docs
+  output:
+    - report
+verify:
+  checks:
+    - "docs build"
+links:
+  related:
+    - "L2: DoD"
+

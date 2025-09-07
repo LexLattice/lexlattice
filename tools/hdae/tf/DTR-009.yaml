@@ -1,0 +1,37 @@
+tf_id: DTR-009
+name: Determinism hooks
+status: stub
+meta:
+  severity: high
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "random/time usage"
+  hints:
+    - "Inject seed/clock"
+  confidence: 0.85
+O:
+  entities:
+    - python:file
+  relations:
+    - nondeterminism
+  scope: path:**/*.py
+L:
+  constraints:
+    - "Seed RNG; avoid wall-clock"
+  transforms:
+    - "Refactor to accept seed"
+  decision_rule: "Propose then apply with tests"
+IO:
+  input:
+    - codebase
+  output:
+    - patch
+verify:
+  checks:
+    - tests
+links:
+  related:
+    - URS-L0-DET-001
+

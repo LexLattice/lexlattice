@@ -1,0 +1,37 @@
+tf_id: TYP-023
+name: Type coverage improvements
+status: stub
+meta:
+  severity: low
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "untyped defs"
+  hints:
+    - "Add annotations"
+  confidence: 0.5
+O:
+  entities:
+    - python:file
+  relations:
+    - typing
+  scope: path:**/*.py
+L:
+  constraints:
+    - "Public funcs typed"
+  transforms:
+    - "Add type hints"
+  decision_rule: "Propose"
+IO:
+  input:
+    - codebase
+  output:
+    - proposal
+verify:
+  checks:
+    - mypy passes
+links:
+  related:
+    - "L2: DoD"
+

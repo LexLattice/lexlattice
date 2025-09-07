@@ -1,0 +1,42 @@
+tf_id: SUB-006
+name: Subprocess guardrails
+status: active
+meta:
+  severity: medium
+  auto: true
+  detect: true
+E:
+  detect_signals:
+    - "subprocess.run("
+    - "shell=True"
+  hints:
+    - "Require explicit env, check return codes"
+    - "Avoid shell=True unless justified"
+  confidence: 0.88
+O:
+  entities:
+    - python:file
+  relations:
+    - invokes-subprocess
+  scope: path:**/*.py
+L:
+  constraints:
+    - "Explicit env and check=True required"
+  transforms:
+    - "Add check=True and capture/timeout"
+  decision_rule: "Apply when adding guards is safe and idempotent"
+IO:
+  input:
+    - codebase
+  output:
+    - patch
+verify:
+  checks:
+    - ruff passes
+    - mypy passes
+    - pytest passes
+links:
+  related:
+    - "L1: Guard I/O"
+    - URS-L0-SEC-002
+

@@ -1,0 +1,37 @@
+tf_id: NAM-010
+name: Naming normalization
+status: stub
+meta:
+  severity: low
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "mixedCase in python"
+  hints:
+    - "Prefer snake_case in Python"
+  confidence: 0.6
+O:
+  entities:
+    - python:identifier
+  relations:
+    - style
+  scope: path:**/*.py
+L:
+  constraints:
+    - "Follow PEP8"
+  transforms:
+    - "Suggest rename"
+  decision_rule: "Propose only"
+IO:
+  input:
+    - codebase
+  output:
+    - proposal
+verify:
+  checks:
+    - ruff
+links:
+  related:
+    - "L2: DoD"
+

@@ -1,0 +1,37 @@
+tf_id: DOC-008
+name: Docs presence
+status: stub
+meta:
+  severity: low
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "missing README sections"
+  hints:
+    - "Add usage examples"
+  confidence: 0.6
+O:
+  entities:
+    - docs:file
+  relations:
+    - missing-section
+  scope: path:**/*.md
+L:
+  constraints:
+    - "Basic docs must exist"
+  transforms:
+    - "Propose template addition"
+  decision_rule: "Propose only"
+IO:
+  input:
+    - docs
+  output:
+    - proposal
+verify:
+  checks:
+    - "docs lint"
+links:
+  related:
+    - "L2: DoD"
+

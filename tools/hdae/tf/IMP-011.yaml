@@ -1,0 +1,37 @@
+tf_id: IMP-011
+name: Import hygiene
+status: stub
+meta:
+  severity: medium
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "wildcard imports"
+  hints:
+    - "Replace with explicit imports"
+  confidence: 0.7
+O:
+  entities:
+    - python:file
+  relations:
+    - import-style
+  scope: path:**/*.py
+L:
+  constraints:
+    - "No wildcard imports"
+  transforms:
+    - "Expand into explicit names"
+  decision_rule: "Propose then apply"
+IO:
+  input:
+    - codebase
+  output:
+    - patch
+verify:
+  checks:
+    - ruff
+links:
+  related:
+    - "L1: invariants"
+

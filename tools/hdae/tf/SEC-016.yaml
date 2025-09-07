@@ -1,0 +1,37 @@
+tf_id: SEC-016
+name: Security scans (lightweight)
+status: stub
+meta:
+  severity: high
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "hardcoded secrets patterns"
+  hints:
+    - "Use env vars/secrets"
+  confidence: 0.7
+O:
+  entities:
+    - source:file
+  relations:
+    - secret-pattern
+  scope: repo
+L:
+  constraints:
+    - "No secrets in repo"
+  transforms:
+    - "Strip and rotate"
+  decision_rule: "Propose"
+IO:
+  input:
+    - repo
+  output:
+    - report
+verify:
+  checks:
+    - "manual review"
+links:
+  related:
+    - URS-L0-SEC-002
+

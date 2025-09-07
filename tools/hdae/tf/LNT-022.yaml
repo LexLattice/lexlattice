@@ -1,0 +1,37 @@
+tf_id: LNT-022
+name: Lint rules tightening
+status: stub
+meta:
+  severity: low
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "ignored lint rules"
+  hints:
+    - "Gradually remove ignores"
+  confidence: 0.5
+O:
+  entities:
+    - config:file
+  relations:
+    - lint-ignore
+  scope: repo
+L:
+  constraints:
+    - "Tighten over time"
+  transforms:
+    - "Adjust ruff config"
+  decision_rule: "Propose"
+IO:
+  input:
+    - repo
+  output:
+    - proposal
+verify:
+  checks:
+    - ruff passes
+links:
+  related:
+    - "L2: DoD"
+

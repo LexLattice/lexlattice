@@ -1,0 +1,37 @@
+tf_id: DOD-019
+name: DoD wiring present
+status: stub
+meta:
+  severity: medium
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "missing DoD in PR"
+  hints:
+    - "Append DoD to PR body"
+  confidence: 0.6
+O:
+  entities:
+    - pr:metadata
+  relations:
+    - dod-present
+  scope: repo
+L:
+  constraints:
+    - "DoD documented"
+  transforms:
+    - "Journal helper"
+  decision_rule: "Propose"
+IO:
+  input:
+    - pr
+  output:
+    - journal
+verify:
+  checks:
+    - audit
+links:
+  related:
+    - "L2: DoD"
+

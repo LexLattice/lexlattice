@@ -1,0 +1,37 @@
+tf_id: LOG-015
+name: Logging hygiene
+status: stub
+meta:
+  severity: low
+  auto: false
+  detect: true
+E:
+  detect_signals:
+    - "print in library code"
+  hints:
+    - "Use logging module"
+  confidence: 0.6
+O:
+  entities:
+    - python:file
+  relations:
+    - logging
+  scope: path:**/*.py
+L:
+  constraints:
+    - "Use structured logging"
+  transforms:
+    - "Replace print with logger"
+  decision_rule: "Propose"
+IO:
+  input:
+    - codebase
+  output:
+    - proposal
+verify:
+  checks:
+    - ruff
+links:
+  related:
+    - "L2: DoD"
+
