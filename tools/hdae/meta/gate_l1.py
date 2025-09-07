@@ -1,4 +1,5 @@
 from __future__ import annotations
+# ruff: noqa: I001
 
 import argparse
 import json
@@ -7,12 +8,14 @@ import re
 import subprocess
 import sys
 from typing import Dict, List, Set, Tuple
+import logging
 
 # Resolve repo root from this file location
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, os.pardir))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 CONFIG_PATH = os.path.join(ROOT, "tools", "hdae", "meta", "gate_config.yaml")
+LOG = logging.getLogger(__name__)
 
 
 def _read(path: str) -> str:
@@ -36,12 +39,13 @@ def _jsonl_lines(path: str) -> List[Dict[str, object]]:
         text = _read(path)
     except OSError:
         return out
-    for ln in [l for l in text.splitlines() if l.strip()]:
+    for ln in [line for line in text.splitlines() if line.strip()]:
         try:
             obj = json.loads(ln)
             if isinstance(obj, dict):
                 out.append(obj)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            LOG.debug("gate: skip bad JSONL line: %s", e)
             continue
     return out
 
@@ -57,9 +61,10 @@ def _discover_changed_files(base_ref: str) -> Set[str]:
                 capture_output=True,
                 cwd=ROOT,
             )
-            files = [l.strip() for l in cp.stdout.splitlines() if l.strip()]
+            files = [line.strip() for line in cp.stdout.splitlines() if line.strip()]
             return set(files)
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
+            LOG.debug("gate: git diff failed on base %s: %s", base, e)
             continue
     return set()
 
@@ -101,7 +106,11 @@ def _count_waivers(conf: Dict[str, object], pr: int, gate_ids: Set[str], cwd: st
 
 def _compute_gate(pr: int, base: str | None, changed_list_file: str | None) -> Tuple[Dict[str, object], int]:
     conf = _load_config()
-    gate_ids = set(str(x) for x in conf.get("gate_on_tf_ids", []))
+    ids = conf.get("gate_on_tf_ids", [])
+    gate_ids: Set[str] = set()
+    if isinstance(ids, list):
+        for x in ids:
+            gate_ids.add(str(x))
     scan_path = str(conf.get("scan_path", "hdae-scan.jsonl"))
     cwd = os.getcwd()
     scan_abs = os.path.abspath(os.path.join(cwd, scan_path))
@@ -110,7 +119,7 @@ def _compute_gate(pr: int, base: str | None, changed_list_file: str | None) -> T
     if changed_list_file:
         try:
             lines = _read(changed_list_file)
-            changed = {l.strip() for l in lines.splitlines() if l.strip()}
+            changed = {line.strip() for line in lines.splitlines() if line.strip()}
         except OSError:
             changed = set()
     else:

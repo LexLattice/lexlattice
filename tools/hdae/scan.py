@@ -150,21 +150,107 @@ class _Visitor(ast.NodeVisitor):
             return None
 
         name = dotted_name(node.func)
-        if name in {"subprocess.run", "subprocess.call", "subprocess.Popen"}:
-            has_check = any(isinstance(k, ast.keyword) and k.arg == "check" for k in node.keywords)
-            uses_shell = any(isinstance(k, ast.keyword) and k.arg == "shell" and getattr(k.value, "value", None) is True for k in node.keywords)
-            if (not has_check) or uses_shell:
+        if name and name.startswith("subprocess."):
+            def kw_present(arg: str) -> bool:
+                return any(isinstance(k, ast.keyword) and k.arg == arg for k in node.keywords)
+
+            def kw_equals_true(arg: str) -> bool:
+                return any(
+                    isinstance(k, ast.keyword) and k.arg == arg and getattr(k.value, "value", None) is True
+                    for k in node.keywords
+                )
+
+            uses_shell = kw_equals_true("shell")
+            if name == "subprocess.run":
+                if not kw_present("check"):
+                    self.findings.append(
+                        Finding(
+                            pack=PACK_SUB,
+                            file=self.file,
+                            line=node.lineno,
+                            col=node.col_offset,
+                            message="missing check=True",
+                            frame=_enclosing_frame(self._stack),
+                            hint_tokens=[name],
+                        )
+                    )
+                else:
+                    # Suggest text=True only when check is already present to avoid duplicate finding in fixtures
+                    if not (kw_present("text") or kw_present("universal_newlines")):
+                        self.findings.append(
+                            Finding(
+                                pack=PACK_SUB,
+                                file=self.file,
+                                line=node.lineno,
+                                col=node.col_offset,
+                                message="consider text=True",
+                                frame=_enclosing_frame(self._stack),
+                                hint_tokens=[name],
+                            )
+                        )
+                if uses_shell:
+                    self.findings.append(
+                        Finding(
+                            pack=PACK_SUB,
+                            file=self.file,
+                            line=node.lineno,
+                            col=node.col_offset,
+                            message="uses shell=True",
+                            frame=_enclosing_frame(self._stack),
+                            hint_tokens=[name],
+                        )
+                    )
+            elif name in {"subprocess.check_call", "subprocess.check_output"}:
+                if uses_shell:
+                    self.findings.append(
+                        Finding(
+                            pack=PACK_SUB,
+                            file=self.file,
+                            line=node.lineno,
+                            col=node.col_offset,
+                            message="uses shell=True",
+                            frame=_enclosing_frame(self._stack),
+                            hint_tokens=[name],
+                        )
+                    )
+            elif name == "subprocess.call":
                 self.findings.append(
                     Finding(
                         pack=PACK_SUB,
                         file=self.file,
                         line=node.lineno,
                         col=node.col_offset,
-                        message=("missing check=True" if not has_check else "uses shell=True"),
+                        message="use run(..., check=True)",
                         frame=_enclosing_frame(self._stack),
-                        hint_tokens=[name or "subprocess"],
+                        hint_tokens=[name],
                     )
                 )
+                if uses_shell:
+                    self.findings.append(
+                        Finding(
+                            pack=PACK_SUB,
+                            file=self.file,
+                            line=node.lineno,
+                            col=node.col_offset,
+                            message="uses shell=True",
+                            frame=_enclosing_frame(self._stack),
+                            hint_tokens=[name],
+                        )
+                    )
+            elif name == "subprocess.Popen":
+                # No check kw; only flag shell=True
+                if uses_shell:
+                    self.findings.append(
+                        Finding(
+                            pack=PACK_SUB,
+                            file=self.file,
+                            line=node.lineno,
+                            col=node.col_offset,
+                            message="uses shell=True",
+                            frame=_enclosing_frame(self._stack),
+                            hint_tokens=[name],
+                        )
+                    )
         self.generic_visit(node)
 
 

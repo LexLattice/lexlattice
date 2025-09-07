@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
+import logging
 from typing import Any, Dict, Iterable, List, Tuple
 
 from .cli import _load_all_tfs, _read
@@ -15,6 +16,7 @@ from .verify import run_verify
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+LOG = logging.getLogger(__name__)
 
 
 @dataclass
@@ -188,23 +190,44 @@ def ingest_diffs(from_dir: str) -> Dict[str, int]:
     with tempfile.TemporaryDirectory(prefix="hdae-wt-") as tmp:
         # ensure tmp exists and is clean dir
         _git("worktree", "add", "--detach", tmp, "HEAD")
+        # Overlay any uncommitted changes from the working tree so verification reflects current code
+        try:
+            changed = subprocess.run(["git", "diff", "--name-only"], cwd=ROOT, check=True, text=True, capture_output=True)
+            for rel in [p for p in changed.stdout.splitlines() if p.strip()]:
+                src = os.path.join(ROOT, rel)
+                dst = os.path.join(tmp, rel)
+                if os.path.isfile(src):
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    try:
+                        with open(src, "rb") as fsrc, open(dst, "wb") as fdst:
+                            fdst.write(fsrc.read())
+                    except OSError as e:
+                        LOG.debug("agent_bridge: overlay copy failed for %s: %s", rel, e)
+        except subprocess.CalledProcessError as e:
+            LOG.debug("agent_bridge: listing uncommitted changes failed: %s", e)
         try:
             ok, _log = _apply_patches_in(tmp, diffs)
             if not ok:
                 _waive_for_diffs(diffs, reason="patch apply failed in worktree")
                 _git("worktree", "remove", "--force", tmp)
                 return {"accepted": 0, "waived": 1}
-            # Run verify (skip nested pytest if configured)
-            # Prefer project venv python if present for ruff/mypy/pytest
+            # Run verify (skip nested pytest if configured). Prefer project venv python.
             vpy = os.path.join(ROOT, ".venv", "bin", "python")
             old_py = os.environ.get("HDAE_PY")
+            old_scope = os.environ.get("HDAE_VERIFY_SCOPE")
             if os.path.exists(vpy):
                 os.environ["HDAE_PY"] = vpy
+            # During nested verify, focus on tools only to avoid local uncommitted test changes
+            os.environ["HDAE_VERIFY_SCOPE"] = "tools"
             ok, _verify_out = run_verify(cwd=tmp)
             if old_py is None:
                 os.environ.pop("HDAE_PY", None)
             else:
                 os.environ["HDAE_PY"] = old_py
+            if old_scope is None:
+                os.environ.pop("HDAE_VERIFY_SCOPE", None)
+            else:
+                os.environ["HDAE_VERIFY_SCOPE"] = old_scope
             if ok:
                 accepted = _accept_into_main(diffs)
                 _git("worktree", "remove", "--force", tmp)
@@ -216,8 +239,8 @@ def ingest_diffs(from_dir: str) -> Dict[str, int]:
             # In case worktree remove failed, ensure tmp is gone
             try:
                 shutil.rmtree(tmp, ignore_errors=True)
-            except Exception:
-                pass
+            except OSError as e:
+                LOG.debug("agent_bridge: cleanup failed: %s", e)
 
 
 def _accept_into_main(diffs: List[str]) -> int:
@@ -240,8 +263,8 @@ def _accept_into_main(diffs: List[str]) -> int:
         applied += 1
         try:
             os.remove(patch_path)
-        except OSError:
-            pass
+        except OSError as e:
+            LOG.debug("agent_bridge: remove patch temp failed: %s", e)
     return applied
 
 

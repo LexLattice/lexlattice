@@ -308,7 +308,9 @@ def main(argv: List[str] | None = None) -> int:
         # Focused validators on H-DAE paths to avoid unrelated drift
         from .verify import run_verify
 
-        ok, _out = run_verify(cwd=None)
+        ok, out = run_verify(cwd=None)
+        if out:
+            print(out)
         return 0 if ok else 1
 
     if cmd.command == "agent":
