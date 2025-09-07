@@ -5,6 +5,11 @@ on:
     branches:
       - 'track/hdae/**'
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   preflight:
     runs-on: ubuntu-latest
@@ -58,21 +63,26 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            let scan = 0, remaining = 0, waivers = 0;
+            const prNumber = context.payload.pull_request?.number ?? context.issue.number;
+            if (!prNumber) {
+              core.setFailed('No PR number in context.');
+              return;
+            }
+            let scan = 0, waivers = 0;
             try { scan = fs.readFileSync('hdae-scan.jsonl','utf8').trim().split('\n').filter(Boolean).length; } catch {}
             try { waivers = fs.readdirSync('docs/agents/waivers').filter(f => f.endsWith('.md')).length; } catch {}
-            remaining = scan; // naive: refine if needed
+            const remaining = Math.max(scan - waivers, 0);
             const body = [
               '### H-DAE Summary',
               `- Findings: **${scan}**`,
               `- Waivers present: **${waivers}**`,
-              `- Remaining (unwaived): **${Math.max(remaining - waivers, 0)}**`,
+              `- Remaining (unwaived): **${remaining}**`,
               '',
               '> L1 invariants outrank all else; unresolved L1 issues without waivers fail CI.',
               '',
               '- Artifacts: scan JSONL and dry-run diffs are attached.',
             ].join('\n');
-            await github.rest.issues.createComment({ issue_number: context.issue.number, owner: context.repo.owner, repo: context.repo.repo, body });
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body });
       - name: Gate on unwaived L1
         run: |
           WAIVERS=$(ls docs/agents/waivers/*.md 2>/dev/null | wc -l || true)
