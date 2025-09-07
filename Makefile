@@ -31,3 +31,12 @@ audit: dev-install
 	$(VENV_DIR)/bin/python scripts/dev/norm_audit.py || true
 
 all: preflight lint type test audit
+
+# --- Norms & Bundles ---
+.PHONY: validate-norms emit-bundle
+
+validate-norms: dev-install
+	$(VENV_DIR)/bin/python scripts/dev/validate_norms.py
+
+emit-bundle: dev-install
+	$(VENV_DIR)/bin/python scripts/urs_emit.py --format json --out docs/bundles/base.json

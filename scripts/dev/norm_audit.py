@@ -195,6 +195,15 @@ def main() -> int:
     ]
     md = "## Norm Audit\n" + "\n".join(summary_lines) + "\n\n```json\n" + json.dumps(payload, indent=2, sort_keys=True) + "\n```\n"
 
+    # Write JSON sidecar for dashboards (deterministic; narrow exceptions)
+    try:
+        side = REPORTS_DIR / f"PR-{args.pr}.json"
+        REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        side.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    except (OSError, TypeError, ValueError) as e:
+        # Non-fatal: journaling continues via markdown fallback
+        print(f"Warning: failed to write audit JSON sidecar: {type(e).__name__}: {e}", file=sys.stderr)
+
     append_to_journal(args.pr, args.branch, md)
     return 0
 
