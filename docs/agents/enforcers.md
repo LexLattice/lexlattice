@@ -27,7 +27,11 @@ Waivers are defined in `Meta.yaml` under the `waivers:` list. The Rulebook compi
 - CLIs are argparse-driven; unsupported subcommands fail fast with helpful `--help`.
 
 ## Extending in PR-2..6
-- Add detectors/patchers per TF pack.
+- Core four packs implemented in Task-2 (PR#8):
+  - BEX-001 (broad/bare except), SIL-002 (silent handler),
+    MDA-003 (mutable defaults), SUB-006 (subprocess hazards).
+  - Pipeline commands: `scan | propose | apply | verify`.
+  - Idempotent transforms; deterministic outputs.
+- Add detectors/patchers for additional packs in later PRs.
 - Wire CI enforcement and agent bridge.
 - Expand schema and verification hooks as needed.
-

@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 from typing import Any, Dict, List, NoReturn, Optional, cast
+import subprocess
 
 try:
     import yaml  # type: ignore
@@ -41,9 +42,9 @@ def load_yaml(s: str) -> Any:
     if yaml is not None:
         try:
             return yaml.safe_load(s) or {}
-        except Exception:
+        except (json.JSONDecodeError, KeyError, IndexError, ValueError, TypeError, OSError, subprocess.CalledProcessError):
             # Fall back to minimal parser on any YAML load error
-            pass
+            raise
     # minimal fallback parser
     data: Dict[str, Any] = {}
     current_key: Optional[str] = None
@@ -195,7 +196,7 @@ def compile_rulebook(meta_path: str, out_path: str, stamp: bool = False) -> Dict
             if wid in compiled and active:
                 compiled[wid].setdefault("_waivers", []).append(w)
         except (KeyError, TypeError):
-            continue
+            raise
 
     groups: Dict[str, List[Dict[str, Any]]] = {"hard": [], "soft": [], "advice": []}
     for r in compiled.values():

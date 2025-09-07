@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sys
+import subprocess
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
@@ -24,7 +25,7 @@ def _read(path: str) -> str:
 def _load_schema() -> Dict[str, Any]:
     try:
         return json.loads(_read(SCHEMA_PATH))
-    except Exception as e:  # pragma: no cover
+    except (json.JSONDecodeError, KeyError, IndexError, ValueError, TypeError, OSError, subprocess.CalledProcessError) as e:
         print(f"schema load error: {e}", file=sys.stderr)
         return {}
 
@@ -107,7 +108,7 @@ def _load_yaml_minimal(s: str) -> Any:
 def _load_tf(path: str) -> Dict[str, Any]:
     try:
         return _load_yaml_minimal(_read(path)) or {}
-    except Exception as e:  # pragma: no cover
+    except (json.JSONDecodeError, KeyError, IndexError, ValueError, TypeError, OSError, subprocess.CalledProcessError) as e:
         raise ValueError(f"failed to load YAML: {path}: {e}")
 
 
@@ -176,7 +177,7 @@ def _validate_tf(tf: Dict[str, Any]) -> List[str]:
         conf = epistem.get("confidence")
         try:
             float(str(conf))
-        except Exception:
+        except (json.JSONDecodeError, KeyError, IndexError, ValueError, TypeError, OSError, subprocess.CalledProcessError):
             errors.append("E.confidence must be number")
 
     # O
@@ -244,11 +245,13 @@ def main(argv: List[str] | None = None) -> int:
         prog="hdae",
         description=(
             "H-DAE CLI skeleton (L1/L2 tie into Rulebook/DoD). "
-            "Subcommands are placeholders; see PR-2 for detectors/patchers."
+            "Implements scan/propose/apply/verify for core packs."
         ),
     )
     ap.add_argument("command", choices=["scan", "propose", "apply", "verify"], help="Pipeline stage")
-    cmd = ap.parse_args(argv).command
+    ap.add_argument("--dry-run", action="store_true", help="For propose: print unified diffs")
+    ap.add_argument("--apply", action="store_true", help="For propose: apply patches in-place")
+    cmd = ap.parse_args(argv)
 
     # Always validate TFs for any subcommand
     tfs = _load_all_tfs()
@@ -262,8 +265,56 @@ def main(argv: List[str] | None = None) -> int:
         print("\n".join(errors))
         return 2
 
-    print(f"Loaded {len(tfs)} TF(s): schema OK")
-    print(f"{cmd}: NYI; see PR-2")
+    if cmd.command == "scan":
+        from .scan import list_repo_py_files, scan_paths
+
+        files = list_repo_py_files(".")
+        findings = scan_paths(files)
+        for f in findings:
+            print(f.to_json())
+        return 0
+
+    if cmd.command in ("propose", "apply"):
+        from .scan import list_repo_py_files
+        from .patch_cst import apply_all
+
+        dry = bool(cmd.dry_run) or cmd.command == "propose"
+        do_apply = bool(cmd.apply) or cmd.command == "apply"
+        rc = 0
+        for p in list_repo_py_files("."):
+            if os.path.relpath(p).startswith("tests/"):
+                continue
+            try:
+                s = _read(p)
+            except OSError:
+                raise
+            new, diffs = apply_all(s, p)
+            if diffs:
+                for d in diffs:
+                    if dry:
+                        print(d, end="")
+                if do_apply:
+                    with open(p, "w", encoding="utf-8") as fp:
+                        fp.write(new)
+                rc = rc or 0
+        return rc
+
+    if cmd.command == "verify":
+        # Focused validators on H-DAE paths to avoid unrelated drift
+        import subprocess
+
+        py = sys.executable
+        checks = [
+            [py, "-m", "ruff", "check", "tools/hdae", "tests/hdae", "tests/fixtures"],
+            [py, "-m", "mypy", "--explicit-package-bases", "tools/hdae", "tests/hdae"],
+            [py, "-m", "pytest", "-q"],
+        ]
+        for cmdv in checks:
+            r = subprocess.run(cmdv, check=True, text=True)
+            if r.returncode != 0:
+                return r.returncode
+        return 0
+
     return 0
 
 

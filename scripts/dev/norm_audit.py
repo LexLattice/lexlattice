@@ -94,7 +94,7 @@ def scan_violation_mix(root: Path) -> List[str]:
             try:
                 txt = p.read_text(encoding="utf-8", errors="ignore")
             except (OSError, UnicodeDecodeError):
-                continue
+                raise
             if re.search(r"\bexcept\s+Exception\b", txt):
                 violations.append(f"{p}: except Exception")
             if re.search(r"\bexcept\s+BaseException\b", txt):
