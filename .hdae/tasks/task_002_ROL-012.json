@@ -1,0 +1,1 @@
+{"tf_id": "ROL-012", "file": "/tmp/pytest-of-rose/pytest-40/test_emit_for_suggest_only0/y.py", "lineno": 10, "code_frame": "for i in range(n):", "allowed_transforms": ["refactor", "extract-function", "rewrite"], "decision_rule": "preserve behavior; reduce risk; parametrize inputs", "hints": ["slice"]}

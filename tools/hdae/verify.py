@@ -20,8 +20,9 @@ def run_verify(cwd: str | None = None) -> Tuple[bool, str]:
         ruff_targets = ["tools/hdae"]
         mypy_targets = ["tools/hdae"]
     else:
-        ruff_targets = ["tools/hdae", "tests"]
-        mypy_targets = ["tools/hdae", "tests"]
+        # Exclude fixtures from linting to avoid false positives on golden files
+        ruff_targets = ["tools/hdae", "tests/hdae"]
+        mypy_targets = ["tools/hdae", "tests/hdae"]
     checks: List[List[str]] = [
         [py, "-m", "ruff", "check", *ruff_targets],
         [py, "-m", "mypy", "--explicit-package-bases", *mypy_targets],
@@ -39,4 +40,3 @@ def run_verify(cwd: str | None = None) -> Tuple[bool, str]:
             out_parts.append(e.stderr or "")
             return False, "".join(out_parts)
     return True, "".join(out_parts)
-

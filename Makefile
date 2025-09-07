@@ -55,6 +55,7 @@ compile: ensure-dirs dev-install
 hdae-verify: dev-install
 	$(VENV_DIR)/bin/python -m tools.hdae.meta.quality --selftest
 	$(VENV_DIR)/bin/python -m tools.hdae.cli scan
+	$(VENV_DIR)/bin/python -m tools.hdae.cli verify
 	@echo "TF schema OK"
 
 journals-template:
