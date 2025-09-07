@@ -5,7 +5,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,7 +30,7 @@ def repo_slug():
     if slug:
         return slug
     url = try_sh("git", "remote", "get-url", "origin")
-    m = re.match(r"^git@github\.com:(.+)\.git$", url) or re.match(r"^https://github\.com/(.+)\.git$", url)
+    m = re.match(r"^git@github\.com:(.+)\.git$", url) or re.match(r"^https://github.com/(.+)\.git$", url)
     if not m:
         print("error: cannot determine repo slug (owner/repo); set gh default repo or origin remote.", file=sys.stderr)
         sys.exit(2)
@@ -154,10 +154,10 @@ def main():
         out_path = out_dir / f"PR-{pr}.json"
         out_path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         try:
-            rel = out_path.resolve().relative_to(ROOT)
+            rel_path = out_path.resolve().relative_to(ROOT)
+            print(f"Wrote {rel_path}")
         except Exception:
-            rel = out_path
-        print(f"Wrote {rel}")
+            print(f"Wrote {out_path}")
 
         if agg_f:
             for e in entries:
@@ -167,7 +167,8 @@ def main():
     if agg_f:
         agg_f.flush()
         try:
-            print(f"Wrote {Path(agg_f.name).resolve().relative_to(ROOT)}")
+            agg_f_path = Path(agg_f.name).resolve().relative_to(ROOT)
+            print(f"Wrote {agg_f_path}")
         except Exception:
             print(f"Wrote {agg_f.name}")
 

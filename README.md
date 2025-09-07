@@ -78,6 +78,27 @@ make hdae-propose
 make hdae-apply
 ```
 
+The scanner now supports the following detection packs:
+- `RES-005`: Resource handling (e.g., `open` without `with`)
+- `SQL-007`: SQL injection (e.g., f-string in `execute`)
+- `ARG-008`: Argparse `type=str` without `choices`
+- `TYP-009`: Missing type annotations
+- `LOG-010`: `print()` in library code
+- `ERR-011`: `raise` without `from` in `except` block
+- `ROL-012`: Naive sliding window recompute in loops
+- `IOB-013`: I/O in hot loops
+- `PATH-014`: Path built with `+` or f-strings
+- `YAML-015`: Unsafe `yaml.load`
+- `JSON-016`: `json.loads` without `JSONDecodeError` handling
+- `CPL-017`: Long functions
+- `DUP-018`: Duplicate code
+
+You can filter the scan to specific packs using the `ARGS` variable with make:
+```bash
+# scan for specific packs
+make hdae-scan ARGS="--packs RES-005,ARG-008"
+```
+
 CI & H-DAE:
 - Every PR in the `track/hdae/**` stack runs: `hdae-verify` → `scan` → `propose --dry-run` → `verify`.
 - CI uploads artifacts (scan JSONL, dry-run diffs, gate.json) and comments a summary from a single source of truth.
