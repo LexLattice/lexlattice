@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import glob
 from dataclasses import dataclass
 import logging
 from typing import Any, Dict, Iterable, List, Tuple
@@ -17,6 +18,15 @@ from .verify import run_verify
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
 LOG = logging.getLogger(__name__)
+
+SUGGEST_PACKS = {
+    "SQL-007",
+    "TYP-009",
+    "ROL-012",
+    "IOB-013",
+    "CPL-017",
+    "DUP-018",
+}
 
 
 @dataclass
@@ -72,6 +82,54 @@ def _load_tf_index() -> Dict[str, Dict[str, Any]]:
         if tf_id:
             idx[tf_id] = tf
     return idx
+
+
+def emit(findings: Iterable[Dict[str, Any]], packs: set[str] | None = None) -> List[str]:
+    """Emit task packets for suggest-only packs.
+
+    Returns list of written file paths.
+    """
+    out_dir = os.path.join(ROOT, ".hdae", "tasks")
+    _ensure_dir(out_dir)
+
+    allowed = SUGGEST_PACKS if packs is None else {p for p in packs if p in SUGGEST_PACKS}
+
+    # Clean existing packets for these packs
+    for p in allowed:
+        for exist in glob.glob(os.path.join(out_dir, f"{p}-*.json")):
+            try:
+                os.remove(exist)
+            except OSError:
+                pass
+
+    tf_index = _load_tf_index()
+    counts: Dict[str, int] = {p: 0 for p in allowed}
+    written: List[str] = []
+    for f in sorted(findings, key=lambda d: (
+        str(d.get("pack") or d.get("tf_id") or ""),
+        str(d.get("file", "")),
+        int(d.get("line", 0)),
+    )):
+        pack = str(f.get("pack") or f.get("tf_id") or "")
+        if pack not in allowed:
+            continue
+        counts[pack] = counts.get(pack, 0) + 1
+        path = os.path.join(out_dir, f"{pack}-{counts[pack]:03d}.json")
+        tf = tf_index.get(pack, {})
+        L = tf.get("L", {}) if isinstance(tf, dict) else {}
+        actions = [str(t) for t in L.get("transforms", [])] if isinstance(L, dict) else []
+        data = {
+            "tf_id": pack,
+            "file": str(f.get("file", "")),
+            "line": int(f.get("line", 0)),
+            "message": str(f.get("message", "")),
+            "hints": [str(h) for h in f.get("hint_tokens", [])],
+            "proposed_actions": actions,
+        }
+        with open(path, "w", encoding="utf-8") as fp:
+            json.dump(data, fp, ensure_ascii=False)
+        written.append(path)
+    return sorted(written)
 
 
 def _is_ambiguous_finding(f: Dict[str, Any]) -> bool:

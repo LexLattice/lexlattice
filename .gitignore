@@ -33,4 +33,4 @@ Meta_waiver_test.yaml
 temp/
 *.tmp
 *.log
-.hdae/
+/.hdae/tasks/
