@@ -16,7 +16,7 @@ import json
 import os
 import re
 import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, NoReturn, Tuple
 
 HERE = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 ROOT = HERE  # repo root (script lives in tools/)
@@ -50,7 +50,7 @@ def sha256_bytes(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
-def die(msg: str, code: int = 1) -> None:
+def die(msg: str, code: int = 1) -> NoReturn:
     print(f"[bundle_emit] {msg}", file=sys.stderr)
     sys.exit(code)
 
@@ -202,7 +202,7 @@ def collect(meta_path: str) -> Tuple[
                 "name": lay.get("name", lid),
                 "severity": severity_hint or "advice",
                 "source": lay["source"],
-                "resolved": os.path.relpath(src, ROOT),
+                "resolved": os.path.relpath(src, ROOT) if os.path.exists(src) else None,
                 "sourceSha": src_sha,
             }
         )

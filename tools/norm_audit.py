@@ -38,8 +38,9 @@ def main() -> None:
     bundle_hash = None
     try:
         with open(args.bundle, "r", encoding="utf-8") as f:
-            bundle_hash = json.load(f).get("hash")
-    except Exception:
+            obj = json.load(f)
+            bundle_hash = obj.get("hash") if isinstance(obj, dict) else None
+    except (FileNotFoundError, json.JSONDecodeError, AttributeError, TypeError, KeyError):
         bundle_hash = None
 
     line = {
