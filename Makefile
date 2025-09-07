@@ -65,7 +65,7 @@ journals-template:
 .PHONY: hdae-scan hdae-propose hdae-apply hdae-agent-emit hdae-agent-ingest
 
 hdae-scan: dev-install
-	$(VENV_DIR)/bin/python -m tools.hdae.cli scan
+	$(VENV_DIR)/bin/python -m tools.hdae.cli scan $(ARGS)
 
 hdae-propose: dev-install
 	$(VENV_DIR)/bin/python -m tools.hdae.cli propose --dry-run

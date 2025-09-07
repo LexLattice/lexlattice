@@ -244,8 +244,8 @@ def main(argv: List[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="hdae",
         description=(
-            "H-DAE CLI skeleton (L1/L2 tie into Rulebook/DoD). "
-            "Implements scan/propose/apply/verify for core packs."
+            "H-DAE CLI (scan/propose/apply/verify/agent). "
+            "Deterministic, stdlib-only tooling."
         ),
     )
     ap.add_argument(
@@ -253,6 +253,7 @@ def main(argv: List[str] | None = None) -> int:
         choices=["scan", "propose", "apply", "verify", "agent"],
         help="Pipeline stage",
     )
+    ap.add_argument("--packs", default="", help="Comma-separated TF ids to include")
     ap.add_argument("--dry-run", action="store_true", help="For propose: print unified diffs")
     ap.add_argument("--apply", action="store_true", help="For propose: apply patches in-place")
     # Parse known args to allow agent subcommands
@@ -270,12 +271,18 @@ def main(argv: List[str] | None = None) -> int:
         print("\n".join(errors))
         return 2
 
+    packs: set[str] | None = None
+    if cmd.packs:
+        packs = {p.strip() for p in cmd.packs.split(",") if p.strip()}
+
     if cmd.command == "scan":
         from .scan import list_repo_py_files, scan_paths
 
         files = list_repo_py_files(".")
         findings = scan_paths(files)
         for f in findings:
+            if packs and getattr(f, "pack", getattr(f, "tf_id", "")) not in packs:
+                continue
             print(f.to_json())
         return 0
 
@@ -305,7 +312,6 @@ def main(argv: List[str] | None = None) -> int:
         return rc
 
     if cmd.command == "verify":
-        # Focused validators on H-DAE paths to avoid unrelated drift
         from .verify import run_verify
 
         ok, out = run_verify(cwd=None)
@@ -317,6 +323,7 @@ def main(argv: List[str] | None = None) -> int:
         ag = argparse.ArgumentParser(prog="hdae agent", description="Agent bridge commands")
         ag.add_argument("sub", choices=["emit", "ingest"], help="Agent action")
         ag.add_argument("--from", dest="from_dir", default=".hdae/diffs", help="Ingest diffs from dir")
+        ag.add_argument("--packs", default=cmd.packs or "", help="Suggest-only packs to include")
         args = ag.parse_args(rest)
         if args.sub == "emit":
             from .scan import list_repo_py_files, scan_paths
@@ -324,6 +331,11 @@ def main(argv: List[str] | None = None) -> int:
 
             files = list_repo_py_files(".")
             finding_dicts = [f.__dict__ for f in scan_paths(files)]
+            only: set[str] | None = None
+            if args.packs:
+                only = {p.strip() for p in args.packs.split(',') if p.strip()}
+            if only is not None:
+                finding_dicts = [f for f in finding_dicts if str(f.get('pack') or f.get('tf_id')) in only]
             written = emit_tasks(finding_dicts)
             print("\n".join(written))
             return 0
