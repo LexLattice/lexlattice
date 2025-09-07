@@ -57,36 +57,49 @@ def die(msg: str, code: int = 1) -> None:
 
 def load_yaml(s: str) -> Any:
     if yaml is not None:
-        return yaml.safe_load(s)
-    # extremely small fallback (sufficient for Meta.yaml in this repo)
+        return yaml.safe_load(s)  # type: ignore[no-any-return]
+    # minimal fallback parser (covers Meta.yaml shape used here)
     data: Dict[str, Any] = {}
-    current_key = None
+    current_key: str | None = None
+    current_item: Dict[str, Any] | None = None
     for line in s.splitlines():
         if not line.strip():
             continue
-        # list item
-        if re.match(r"^\s*-\s", line) and current_key is not None and isinstance(data.get(current_key), list):
+        # Start of list item
+        if (
+            re.match(r"^\s*-\s", line)
+            and current_key is not None
+            and isinstance(data.get(current_key), list)
+        ):
             item_line = line.strip()[1:].strip()
             if ":" in item_line:
                 k, v = item_line.split(":", 1)
-                data[current_key].append({k.strip(): v.strip().strip('\"\'')})
+                current_item = {k.strip(): v.strip().strip('\"\'')}
+                data[current_key].append(current_item)
             else:
                 data[current_key].append(item_line.strip().strip('\"\''))
+                current_item = None
             continue
-        # key: value
+        # Continuation line for a mapping list item
+        if current_key is not None and isinstance(data.get(current_key), list) and isinstance(current_item, dict):
+            cont = re.match(r"^\s+([A-Za-z0-9_\-]+)\s*:\s*(.*)$", line)
+            if cont:
+                ck, cv = cont.group(1), cont.group(2)
+                current_item[ck] = cv.strip().strip('\"\'')
+                continue
+        # Top-level key: value
         m = re.match(r"^([A-Za-z0-9_\-]+)\s*:\s*(.*)$", line)
         if m:
             k, v = m.group(1), m.group(2)
-            v = v.strip()
-            if v in ("", "[]"):
-                data[k] = []
+            v_stripped = v.strip()
+            if v_stripped in ("", "[]", "{}"):
+                data[k] = [] if v_stripped in ("", "[]") else {}
                 current_key = k
-            elif v == "{}":
-                data[k] = {}
-                current_key = k
-            else:
-                data[k] = v.strip().strip('\"\'')
-                current_key = k
+                current_item = None
+                continue
+            data[k] = v_stripped.strip('\"\'')
+            current_key = k
+            current_item = None
     return data
 
 
@@ -164,7 +177,13 @@ def canonical_json(d: Any) -> bytes:
     return json.dumps(d, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def collect(meta_path: str) -> Tuple[Dict[str, Any], Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
+def collect(meta_path: str) -> Tuple[
+    Dict[str, Any],
+    Dict[str, Any],
+    List[Dict[str, Any]],
+    List[Dict[str, Any]],
+    Dict[str, List[str]],
+]:
     meta = load_meta(meta_path)
     meta_sha = file_sha256(meta_path)
     layers_out: List[Dict[str, Any]] = []
@@ -183,7 +202,7 @@ def collect(meta_path: str) -> Tuple[Dict[str, Any], Dict[str, Any], List[Dict[s
                 "name": lay.get("name", lid),
                 "severity": severity_hint or "advice",
                 "source": lay["source"],
-                "resolved": src,
+                "resolved": os.path.relpath(src, ROOT),
                 "sourceSha": src_sha,
             }
         )

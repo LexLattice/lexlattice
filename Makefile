@@ -28,8 +28,9 @@ test: dev-install
 	$(VENV_DIR)/bin/pytest -q
 
 audit: dev-install
+	$(VENV_DIR)/bin/python scripts/dev/norm_audit.py || true
 	@if [ -z "$(PR)" ]; then echo "PR=<n> required"; exit 1; fi
-	python3 tools/norm_audit.py --pr $(PR) --sha $$(git rev-parse --short HEAD) --bundle docs/bundles/base.llbundle.json --event compile --notes "emit-bundle"
+	$(VENV_DIR)/bin/python tools/norm_audit.py --pr $(PR) --sha $$(git rev-parse --short HEAD) --bundle docs/bundles/base.llbundle.json --event compile --notes "emit-bundle"
 	@echo "audit appended for PR $(PR)"
 
 all: preflight lint type test audit
@@ -40,12 +41,10 @@ all: preflight lint type test audit
 validate-norms: dev-install
 	$(VENV_DIR)/bin/python scripts/dev/validate_norms.py
 
-emit-bundle: dev-install
-	$(MAKE) compile
-	@echo "bundle at docs/bundles/base.llbundle.json"
+emit-bundle: compile
 
 ensure-dirs:
 	mkdir -p docs/agents docs/bundles docs/audit
 
 compile: ensure-dirs
-	python3 urs.py compile --meta Meta.yaml --out docs/agents/Compiled.Rulebook.md --json-out docs/bundles/base.llbundle.json
+	$(VENV_DIR)/bin/python urs.py compile --meta Meta.yaml --out docs/agents/Compiled.Rulebook.md --json-out docs/bundles/base.llbundle.json
