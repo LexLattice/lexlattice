@@ -28,6 +28,11 @@ When deterministic auto-fixes are unsafe or ambiguous, the Agent Bridge can pack
 
 Lifecycle: scan → propose(auto) → agent(emit/ingest) → verify → commit | waiver.
 
+### PR-footprint L1 Gating
+- CI gates only on L1 invariants within the PR footprint (by default: BEX-001, SIL-002).
+- The gate script (`tools/hdae/meta/gate_l1.py`) loads `tools/hdae/meta/gate_config.yaml`, filters `hdae-scan.jsonl` to files changed in the PR, subtracts waivers for this PR (`docs/agents/waivers/PR-<n>.md`), and decides pass/fail deterministically.
+- Add a waiver by creating `docs/agents/waivers/PR-<n>.md` with lines like `tf_id: BEX-001` or `tf_id: SIL-002` and a rationale/context.
+
 ## Determinism & DoD
 - L0/L1/L2 precedence applies: L0 (determinism) > L1 (IDE invariants) > L2 (DoD gates).
 - No wall-clock or RNG branching in this pipeline.

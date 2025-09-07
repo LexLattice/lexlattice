@@ -80,8 +80,8 @@ make hdae-apply
 
 CI & H-DAE:
 - Every PR in the `track/hdae/**` stack runs: `hdae-verify` → `scan` → `propose --dry-run` → `verify`.
-- CI uploads artifacts (scan JSONL, dry-run diffs) and comments a summary: Findings / Waivers / Remaining.
-- If unwaived L1 findings remain, CI fails (L1 precedence).
+- CI uploads artifacts (scan JSONL, dry-run diffs, gate.json) and comments a summary from a single source of truth.
+- CI gates only on L1 invariants within the PR footprint (default: BEX-001, SIL-002). Add justified waivers in `docs/agents/waivers/PR-<n>.md`.
 - On push to `main`, the Rulebook compiles and the Waivers Index stays fresh.
 
 Using the Agent Bridge for ambiguous sites:
