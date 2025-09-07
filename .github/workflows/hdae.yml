@@ -1,0 +1,81 @@
+name: H-DAE
+
+on:
+  pull_request:
+    branches:
+      - 'track/hdae/**'
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dev tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy pytest pyyaml jsonschema libcst
+      - name: Doctor (if present)
+        run: |
+          if [ -x scripts/dev/codex_session_doctor.sh ]; then scripts/dev/codex_session_doctor.sh --fix || true; fi
+
+  hdae-run:
+    runs-on: ubuntu-latest
+    needs: preflight
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dev tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy pytest pyyaml jsonschema libcst
+      - name: Verify H-DAE setup
+        run: make hdae-verify
+      - name: Scan
+        run: python -m tools.hdae.cli scan > hdae-scan.jsonl || true
+      - name: Propose (dry-run)
+        run: python -m tools.hdae.cli propose --dry-run > hdae-diff.txt || true
+      - name: Verify (ruff/mypy/pytest)
+        run: python -m tools.hdae.cli verify
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hdae-artifacts
+          path: |
+            hdae-scan.jsonl
+            hdae-diff.txt
+            docs/agents/waivers/**/*.md
+      - name: Summarize in PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let scan = 0, remaining = 0, waivers = 0;
+            try { scan = fs.readFileSync('hdae-scan.jsonl','utf8').trim().split('\n').filter(Boolean).length; } catch {}
+            try { waivers = fs.readdirSync('docs/agents/waivers').filter(f => f.endsWith('.md')).length; } catch {}
+            remaining = scan; // naive: refine if needed
+            const body = [
+              '### H-DAE Summary',
+              `- Findings: **${scan}**`,
+              `- Waivers present: **${waivers}**`,
+              `- Remaining (unwaived): **${Math.max(remaining - waivers, 0)}**`,
+              '',
+              '> L1 invariants outrank all else; unresolved L1 issues without waivers fail CI.',
+              '',
+              '- Artifacts: scan JSONL and dry-run diffs are attached.',
+            ].join('\n');
+            await github.rest.issues.createComment({ issue_number: context.issue.number, owner: context.repo.owner, repo: context.repo.repo, body });
+      - name: Gate on unwaived L1
+        run: |
+          WAIVERS=$(ls docs/agents/waivers/*.md 2>/dev/null | wc -l || true)
+          SCAN=$(wc -l < hdae-scan.jsonl 2>/dev/null || echo 0)
+          REMAIN=$(( SCAN > WAIVERS ? SCAN - WAIVERS : 0 ))
+          if [ "$REMAIN" -gt 0 ]; then
+            echo "Unwaived findings remain: $REMAIN"; exit 1; fi
+

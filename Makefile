@@ -78,3 +78,9 @@ hdae-agent-emit: dev-install
 
 hdae-agent-ingest: dev-install
 	$(VENV_DIR)/bin/python -m tools.hdae.cli agent ingest --from .hdae/diffs
+
+.PHONY: hdae-ci
+hdae-ci: hdae-verify
+	$(VENV_DIR)/bin/python -m tools.hdae.cli scan > hdae-scan.jsonl || true
+	$(VENV_DIR)/bin/python -m tools.hdae.cli propose --dry-run > hdae-diff.txt || true
+	$(VENV_DIR)/bin/python -m tools.hdae.cli verify
