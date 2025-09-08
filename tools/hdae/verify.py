@@ -14,9 +14,16 @@ def run_verify(cwd: str | None = None) -> Tuple[bool, str]:
     HDAE_SKIP_INNER_PYTEST=1 to skip the pytest stage.
     """
     py = os.environ.get("HDAE_PY", sys.executable)
+    scope = os.environ.get("HDAE_VERIFY_SCOPE", "all")
+    if scope == "tools":
+        ruff_targets = ["tools/hdae"]
+        mypy_targets = ["tools/hdae"]
+    else:
+        ruff_targets = ["tools/hdae", "tests/hdae", "tests/fixtures"]
+        mypy_targets = ["tools/hdae", "tests/hdae"]
     checks: List[List[str]] = [
-        [py, "-m", "ruff", "check", "tools/hdae", "tests/hdae", "tests/fixtures"],
-        [py, "-m", "mypy", "--explicit-package-bases", "tools/hdae", "tests/hdae"],
+        [py, "-m", "ruff", "check", *ruff_targets],
+        [py, "-m", "mypy", "--explicit-package-bases", *mypy_targets],
     ]
     if os.environ.get("HDAE_SKIP_INNER_PYTEST") not in {"1", "true", "True"}:
         checks.append([py, "-m", "pytest", "-q"])

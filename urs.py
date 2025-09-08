@@ -13,7 +13,6 @@ import re
 import subprocess
 import sys
 from typing import Any, Dict, List, NoReturn, Optional, cast
-import subprocess
 
 try:
     import yaml  # type: ignore

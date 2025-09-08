@@ -65,7 +65,7 @@ Notes:
 - `make all` also runs an optional norm audit if present.
  - Imports are auto-sortable with `ruff` (run `ruff check --fix`).
 
-## Agent Enforcers (H-DAE)
+## Agent Enforcers (H-DAE) ![H-DAE CI](https://github.com/LexLattice/lexlattice/actions/workflows/hdae.yml/badge.svg)
 
 This repo includes the skeleton for Hybrid Deterministic + Agent Enforcers:
 - Read the spec: `docs/agents/EOL-of-Coding.md`
@@ -87,6 +87,19 @@ make hdae-propose
 # apply fixes and verify with ruff + mypy + pytest
 make hdae-apply
 ```
+
+CI & H-DAE:
+- Every PR in the `track/hdae/**` stack runs: `hdae-verify` → `scan` → `propose --dry-run` → `verify`.
+- CI uploads artifacts (scan JSONL, dry-run diffs, gate.json) and comments a summary from a single source of truth.
+- CI gates only on L1 invariants within the PR footprint (default: BEX-001, SIL-002). Add justified waivers in `docs/agents/waivers/PR-<n>.md`.
+
+Run CI locally (parity):
+- Fast path (no containers):
+  - `make ci-local PR_NUMBER=0 BASE_REF=track/hdae/pr9-agent-bridge`
+- Exact GitHub runner via act (optional):
+  - `scripts/ci/run_act_pr.sh 10 track/hdae/pr9-agent-bridge`
+- Local runs won’t post PR comments unless `CI_ALLOW_PR_COMMENT=1` and a valid `GITHUB_TOKEN` are set.
+- On push to `main`, the Rulebook compiles and the Waivers Index stays fresh.
 
 Using the Agent Bridge for ambiguous sites:
 

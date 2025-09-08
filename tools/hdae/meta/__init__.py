@@ -1,3 +1,2 @@
-from typing import List
+"""Metadata utils for H-DAE (gate config and scripts)."""
 
-__all__: List[str] = []

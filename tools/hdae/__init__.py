@@ -1,3 +1,6 @@
-from typing import List
+"""H-DAE package root (tools.hdae).
 
-__all__: List[str] = []
+Namespace marker to give mypy a single, explicit package base
+and avoid duplicate module discovery like 'hdae.*' vs 'tools.hdae.*'.
+"""
+
