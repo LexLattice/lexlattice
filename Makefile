@@ -29,25 +29,20 @@ test: dev-install
 
 audit: dev-install
 	$(VENV_DIR)/bin/python scripts/dev/norm_audit.py || true
-	@if [ -z "$(PR)" ]; then echo "PR=<n> required"; exit 1; fi
-	$(VENV_DIR)/bin/python tools/norm_audit.py --pr $(PR) --sha $$(git rev-parse --short HEAD) --bundle docs/bundles/base.llbundle.json --event compile --notes "emit-bundle"
-	@echo "audit appended for PR $(PR)"
 
 all: preflight lint type test audit
 
 # --- Norms & Bundles ---
-.PHONY: validate-norms emit-bundle compile ensure-dirs
+.PHONY: validate-norms emit-bundle
 
 validate-norms: dev-install
 	$(VENV_DIR)/bin/python scripts/dev/validate_norms.py
-
 
 emit-bundle: dev-install
 	$(VENV_DIR)/bin/python scripts/urs_emit.py --format json --out docs/bundles/base.json
 
 # Optional compile target (for v0.1 rulebook)
 .PHONY: ensure-dirs compile
-
 ensure-dirs:
 	mkdir -p docs/agents docs/bundles docs/audit
 
@@ -61,7 +56,6 @@ hdae-verify: dev-install
 	$(VENV_DIR)/bin/python -m tools.hdae.meta.quality --selftest
 	$(VENV_DIR)/bin/python -m tools.hdae.cli scan
 	$(VENV_DIR)/bin/python -m tools.hdae.cli verify
-
 	@echo "TF schema OK"
 
 journals-template:
@@ -84,3 +78,19 @@ hdae-agent-emit: dev-install
 
 hdae-agent-ingest: dev-install
 	$(VENV_DIR)/bin/python -m tools.hdae.cli agent ingest --from .hdae/diffs
+
+.PHONY: hdae-ci
+hdae-ci: hdae-verify
+	$(VENV_DIR)/bin/python -m tools.hdae.cli scan > hdae-scan.jsonl || true
+	$(VENV_DIR)/bin/python -m tools.hdae.cli propose --dry-run > hdae-diff.txt || true
+	$(VENV_DIR)/bin/python -m tools.hdae.cli verify
+
+.PHONY: ci-local
+ci-local:
+	@PR_NUMBER?=0 BASE_REF?=main
+	@bash scripts/ci/hdae_ci.sh preflight
+	@bash scripts/ci/hdae_ci.sh verify
+	@PR_NUMBER=$(PR_NUMBER) BASE_REF=$(BASE_REF) bash scripts/ci/hdae_ci.sh scan
+	@bash scripts/ci/hdae_ci.sh propose-dry
+	@PR_NUMBER=$(PR_NUMBER) BASE_REF=$(BASE_REF) bash scripts/ci/hdae_ci.sh gate || true
+	@bash scripts/ci/hdae_ci.sh comment || true

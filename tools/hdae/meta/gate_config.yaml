@@ -1,0 +1,7 @@
+gate_on_tf_ids:
+  - "BEX-001"
+  - "SIL-002"
+waiver_file_pattern: "docs/agents/waivers/PR-{pr}.md"
+waiver_tf_regex: "\\btf_id\\s*:\\s*([A-Z]+-\\d{3})\\b"
+count_scope: "pr_footprint"
+scan_path: "hdae-scan.jsonl"
