@@ -2,4 +2,4 @@
 import subprocess
 
 def run_ls():
-    return subprocess.run(["echo", "hi"], check=True, text=True)  # missing check/text
+    return subprocess.run(["echo", "hi"])  # missing check/text

@@ -87,3 +87,13 @@ make hdae-propose
 # apply fixes and verify with ruff + mypy + pytest
 make hdae-apply
 ```
+
+Using the Agent Bridge for ambiguous sites:
+
+```bash
+# generate task packets for ambiguous findings only
+make hdae-agent-emit
+
+# ingest proposed diffs from an agent (unified patches)
+make hdae-agent-ingest  # defaults to .hdae/diffs
+```

@@ -248,10 +248,15 @@ def main(argv: List[str] | None = None) -> int:
             "Implements scan/propose/apply/verify for core packs."
         ),
     )
-    ap.add_argument("command", choices=["scan", "propose", "apply", "verify"], help="Pipeline stage")
+    ap.add_argument(
+        "command",
+        choices=["scan", "propose", "apply", "verify", "agent"],
+        help="Pipeline stage",
+    )
     ap.add_argument("--dry-run", action="store_true", help="For propose: print unified diffs")
     ap.add_argument("--apply", action="store_true", help="For propose: apply patches in-place")
-    cmd = ap.parse_args(argv)
+    # Parse known args to allow agent subcommands
+    cmd, rest = ap.parse_known_args(argv)
 
     # Always validate TFs for any subcommand
     tfs = _load_all_tfs()
@@ -301,19 +306,32 @@ def main(argv: List[str] | None = None) -> int:
 
     if cmd.command == "verify":
         # Focused validators on H-DAE paths to avoid unrelated drift
-        import subprocess
+        from .verify import run_verify
 
-        py = sys.executable
-        checks = [
-            [py, "-m", "ruff", "check", "tools/hdae", "tests/hdae", "tests/fixtures"],
-            [py, "-m", "mypy", "--explicit-package-bases", "tools/hdae", "tests/hdae"],
-            [py, "-m", "pytest", "-q"],
-        ]
-        for cmdv in checks:
-            r = subprocess.run(cmdv, check=True, text=True)
-            if r.returncode != 0:
-                return r.returncode
-        return 0
+        ok, _out = run_verify(cwd=None)
+        return 0 if ok else 1
+
+    if cmd.command == "agent":
+        ag = argparse.ArgumentParser(prog="hdae agent", description="Agent bridge commands")
+        ag.add_argument("sub", choices=["emit", "ingest"], help="Agent action")
+        ag.add_argument("--from", dest="from_dir", default=".hdae/diffs", help="Ingest diffs from dir")
+        args = ag.parse_args(rest)
+        if args.sub == "emit":
+            from .scan import list_repo_py_files, scan_paths
+            from .agent_bridge import emit_tasks
+
+            files = list_repo_py_files(".")
+            finding_dicts = [f.__dict__ for f in scan_paths(files)]
+            written = emit_tasks(finding_dicts)
+            print("\n".join(written))
+            return 0
+        if args.sub == "ingest":
+            from .agent_bridge import ingest_diffs
+
+            res = ingest_diffs(args.from_dir)
+            print(json.dumps(res))
+            # Exit code 0 if all accepted, 1 if any waived
+            return 0 if res.get("waived", 0) == 0 else 1
 
     return 0
 
