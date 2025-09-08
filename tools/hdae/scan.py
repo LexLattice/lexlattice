@@ -30,6 +30,7 @@ import json
 import os
 from dataclasses import dataclass, asdict
 from typing import Iterable, List, Optional, Tuple
+import re
 
 
 PACK_BEX = "BEX-001"
@@ -50,6 +51,9 @@ PACK_YAML = "YAML-015"
 PACK_JSON = "JSON-016"
 PACK_CPL = "CPL-017"
 PACK_DUP = "DUP-018"
+PACK_CON_AWAIT = "CON-019"
+PACK_CON_BLOCK = "CON-020"
+PACK_SEC = "SEC-023"
 
 
 @dataclass
@@ -111,11 +115,35 @@ class _Visitor(ast.NodeVisitor):
         self.findings: List[Finding] = []
         self._stack: List[ast.AST] = []
         self._in_main_guard_stack: List[bool] = []
+        self._scan_secrets()
 
     def generic_visit(self, node: ast.AST) -> None:  # push/pop stack for frames
         self._stack.append(node)
         super().generic_visit(node)
         self._stack.pop()
+
+    def _scan_secrets(self) -> None:
+        patterns = [
+            re.compile(r"(?:AKIA|ASIA)[0-9A-Z]{16}"),
+            re.compile(r"api_key\s*=\s*['\"][^'\"]+['\"]"),
+            re.compile(r"Authorization: Bearer [A-Za-z0-9\-._]+"),
+            re.compile(r"[A-Za-z0-9]{32,}"),
+        ]
+        for i, line in enumerate(self.src.splitlines(), start=1):
+            for pat in patterns:
+                for m in pat.finditer(line):
+                    token = m.group(0)
+                    self.findings.append(
+                        Finding(
+                            pack=PACK_SEC,
+                            file=self.file,
+                            line=i,
+                            col=m.start(),
+                            message="possible hardcoded secret",
+                            frame="<module>",
+                            hint_tokens=[token[:20]],
+                        )
+                    )
 
     # Helpers
     def _handler_name(self, h: ast.ExceptHandler) -> Optional[str]:
@@ -266,6 +294,37 @@ class _Visitor(ast.NodeVisitor):
             return None
 
         name = dotted_name(node.func)
+        in_async = any(isinstance(n, ast.AsyncFunctionDef) for n in self._stack)
+        if in_async and name:
+            if name.startswith("requests.") or name == "time.sleep" or name == "open":
+                self.findings.append(
+                    Finding(
+                        pack=PACK_CON_BLOCK,
+                        file=self.file,
+                        line=node.lineno,
+                        col=node.col_offset,
+                        message="blocking call in async function",
+                        frame=_enclosing_frame(self._stack),
+                        hint_tokens=[name],
+                    )
+                )
+            elif name == "subprocess.run":
+                check_false = True
+                for kw in node.keywords:
+                    if kw.arg == "check" and isinstance(kw.value, ast.Constant) and kw.value.value:
+                        check_false = False
+                if check_false:
+                    self.findings.append(
+                        Finding(
+                            pack=PACK_CON_BLOCK,
+                            file=self.file,
+                            line=node.lineno,
+                            col=node.col_offset,
+                            message="subprocess.run in async function",
+                            frame=_enclosing_frame(self._stack),
+                            hint_tokens=[name],
+                        )
+                    )
         # SUB: subprocess hazards
         if name and name.startswith("subprocess."):
             def kw_present(arg: str) -> bool:
@@ -601,6 +660,21 @@ class _Visitor(ast.NodeVisitor):
                             span=(node.lineno, getattr(node, "end_lineno", node.lineno)),
                         )
                     )
+        self.generic_visit(node)
+
+    def visit_Await(self, node: ast.Await) -> None:  # CON-019
+        if any(isinstance(n, (ast.For, ast.AsyncFor, ast.While)) for n in self._stack):
+            self.findings.append(
+                Finding(
+                    pack=PACK_CON_AWAIT,
+                    file=self.file,
+                    line=node.lineno,
+                    col=node.col_offset,
+                    message="await inside loop; consider asyncio.gather",
+                    frame=_enclosing_frame(self._stack),
+                    hint_tokens=["await"],
+                )
+            )
         self.generic_visit(node)
 
     def visit_Return(self, node: ast.Return) -> None:  # PATH-014 heuristic
