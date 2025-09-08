@@ -1,0 +1,35 @@
+BEX-001:
+  name: Ban blanket except Exception
+  sev: high
+  auto: true
+  desc: Disallow bare or blanket except clauses.
+
+SIL-002:
+  name: Ban silent except
+  sev: high
+  auto: true
+  desc: Forbid except blocks that swallow errors.
+
+MDA-003:
+  name: Flag mutable default args
+  sev: high
+  auto: true
+  desc: Replace mutable default arguments.
+
+SUB-006:
+  name: Guard subprocess hazards
+  sev: medium
+  auto: false
+  desc: Detect risky subprocess usage.
+
+YAML-015:
+  name: Use yaml.safe_load
+  sev: medium
+  auto: true
+  desc: Replace yaml.load with safe_load.
+
+ERR-011:
+  name: Link causal chain via raise
+  sev: medium
+  auto: true
+  desc: Use raise ... from e to preserve context.

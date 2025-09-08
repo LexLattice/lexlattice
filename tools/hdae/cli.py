@@ -15,6 +15,7 @@ import subprocess
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
 TF_DIR = os.path.join(ROOT, "tools", "hdae", "tf")
 SCHEMA_PATH = os.path.join(ROOT, "tools", "hdae", "schema", "tf.schema.json")
+PACKS_PATH = os.path.join(ROOT, "tools", "hdae", "packs.yaml")
 
 
 def _read(path: str) -> str:
@@ -240,6 +241,44 @@ def _load_all_tfs() -> List[Tuple[str, Dict[str, Any]]]:
     return out
 
 
+def _load_packs() -> Dict[str, Dict[str, Any]]:
+    try:
+        data = _load_yaml_minimal(_read(PACKS_PATH)) or {}
+    except (json.JSONDecodeError, KeyError, IndexError, ValueError, TypeError, OSError, subprocess.CalledProcessError) as e:
+        raise ValueError(f"failed to load packs registry: {e}") from e
+    packs: Dict[str, Dict[str, Any]] = {}
+    for pid, meta in data.items():
+        if not isinstance(meta, dict):
+            continue
+        packs[pid] = {
+            "name": meta.get("name", ""),
+            "sev": meta.get("sev", ""),
+            "auto": _to_bool(meta.get("auto", False)),
+            "desc": meta.get("desc", ""),
+        }
+    return packs
+
+
+def _render_pack_table(packs: Dict[str, Dict[str, Any]]) -> str:
+    lines = ["id      name                           sev   auto"]
+    for pid in sorted(packs):
+        p = packs[pid]
+        auto = "Y" if p.get("auto") else "N"
+        lines.append(f"{pid:<8} {p.get('name',''):<30} {p.get('sev',''):<5} {auto}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_pack_block(pid: str, meta: Dict[str, Any]) -> str:
+    auto = "true" if meta.get("auto") else "false"
+    return (
+        f"{pid}:\n"
+        f"  name: {meta.get('name', '')}\n"
+        f"  sev: {meta.get('sev', '')}\n"
+        f"  auto: {auto}\n"
+        f"  desc: {meta.get('desc', '')}\n"
+    )
+
+
 def main(argv: List[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="hdae",
@@ -250,7 +289,7 @@ def main(argv: List[str] | None = None) -> int:
     )
     ap.add_argument(
         "command",
-        choices=["scan", "propose", "apply", "verify", "agent"],
+        choices=["scan", "propose", "apply", "verify", "agent", "packs"],
         help="Pipeline stage",
     )
     ap.add_argument("--packs", default="", help="Comma-separated TF ids to include")
@@ -356,6 +395,24 @@ def main(argv: List[str] | None = None) -> int:
             print(json.dumps(res))
             # Exit code 0 if all accepted, 1 if any waived
             return 0 if res.get("waived", 0) == 0 else 1
+
+    if cmd.command == "packs":
+        pp = argparse.ArgumentParser(prog="hdae packs", description="Pack registry commands")
+        grp = pp.add_mutually_exclusive_group(required=True)
+        grp.add_argument("--list", action="store_true", help="List all packs")
+        grp.add_argument("--explain", metavar="ID", help="Show YAML for a pack")
+        args = pp.parse_args(rest)
+        registry = _load_packs()
+        if args.list:
+            sys.stdout.write(_render_pack_table(registry))
+            return 0
+        if args.explain:
+            meta = registry.get(args.explain)
+            if not meta:
+                print(f"unknown pack: {args.explain}", file=sys.stderr)
+                return 1
+            sys.stdout.write(_render_pack_block(args.explain, meta))
+            return 0
 
     return 0
 
