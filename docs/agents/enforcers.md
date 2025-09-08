@@ -18,6 +18,15 @@ Descriptions:
 - Status: `status: {active|stub|disabled}` — only active TFs participate in scan/apply.
 - Four baseline TF packs are fully populated in this PR: BEX-001, SIL-002, MDA-003, SUB-006. Others are `status: stub` placeholders for later PRs.
 
+## Pack registry v0.1
+All packs are cataloged under `tools/hdae/packs.yaml` with their severity and
+auto-fix status. Discoverability and lookup are available via the CLI:
+
+```
+hdae packs --list            # tabular id/name/severity/auto
+hdae packs --explain <ID>    # show YAML entry for a pack
+```
+
 ## Waivers → Rulebook
 Waivers are defined in `Meta.yaml` under the `waivers:` list. The Rulebook compiler (`urs.py`) merges active waivers into the compiled output, and an index appears under each affected rule. For discoverability, waiver notes and rationale are mirrored at `docs/agents/waivers/`.
 
