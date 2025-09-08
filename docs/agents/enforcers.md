@@ -49,3 +49,17 @@ Lifecycle: scan → propose(auto) → agent(emit/ingest) → verify → commit |
 - ERR-011: link causal chain via `raise ... from e` (auto-fix; format-preserving; idempotent).
 - Wire CI enforcement and agent bridge.
 - Expand schema and verification hooks as needed.
+
+## Detect-only async & secret packs (L2)
+- CON-019: `await` inside loops; suggest `asyncio.gather`.
+- CON-020: blocking I/O in `async def` (`requests.*`, `time.sleep`, `subprocess.run` with `check=False`, file I/O).
+- SEC-023: hardcoded secrets (AWS keys, long tokens, `api_key=...`, `Authorization: Bearer ...`).
+
+These emit L2 warnings by default and do not auto-fix. To waive:
+
+```yaml
+waivers:
+  - tf_id: CON-019
+  - tf_id: CON-020
+  - tf_id: SEC-023
+```
