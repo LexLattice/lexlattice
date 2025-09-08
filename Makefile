@@ -1,4 +1,4 @@
-.PHONY: venv dev-install preflight lint type test audit all
+.PHONY: venv dev-install preflight lint type test audit all hooks
 
 VENV_DIR := .venv
 DEV_SENTINEL := $(VENV_DIR)/.dev-deps-installed
@@ -31,6 +31,10 @@ audit: dev-install
 	$(VENV_DIR)/bin/python scripts/dev/norm_audit.py || true
 
 all: preflight lint type test audit
+
+.PHONY: hooks
+hooks:
+	pre-commit install
 
 # --- Norms & Bundles ---
 .PHONY: validate-norms emit-bundle
