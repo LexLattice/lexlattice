@@ -10,6 +10,7 @@ import tempfile
 import glob
 from dataclasses import dataclass
 import logging
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
 from .cli import _load_all_tfs, _read
@@ -99,12 +100,12 @@ def emit(findings: Iterable[Dict[str, Any]], packs: set[str] | None = None) -> L
         for exist in glob.glob(os.path.join(out_dir, f"{p}-*.json")):
             try:
                 os.remove(exist)
-            except OSError:
-                pass
+            except OSError as e:
+                LOG.debug("agent_bridge: remove task packet %s failed: %s", exist, e)
 
     tf_index = _load_tf_index()
     counts: Dict[str, int] = {p: 0 for p in allowed}
-    written: List[str] = []
+    to_write: List[Tuple[str, Dict[str, Any]]] = []
     for f in sorted(findings, key=lambda d: (
         str(d.get("pack") or d.get("tf_id") or ""),
         str(d.get("file", "")),
@@ -126,8 +127,10 @@ def emit(findings: Iterable[Dict[str, Any]], packs: set[str] | None = None) -> L
             "hints": [str(h) for h in f.get("hint_tokens", [])],
             "proposed_actions": actions,
         }
-        with open(path, "w", encoding="utf-8") as fp:
-            json.dump(data, fp, ensure_ascii=False)
+        to_write.append((path, data))
+    written: List[str] = []
+    for path, data in to_write:
+        Path(path).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         written.append(path)
     return sorted(written)
 
@@ -155,7 +158,7 @@ def emit_tasks(findings: Iterable[Dict[str, Any]]) -> List[str]:
     _ensure_dir(out_dir)
 
     tf_by_id = _load_tf_index()
-    written: List[str] = []
+    tasks: List[Tuple[str, str]] = []
     n = 0
     for f in findings:
         if not _is_ambiguous_finding(f):
@@ -175,8 +178,10 @@ def emit_tasks(findings: Iterable[Dict[str, Any]]) -> List[str]:
         )
         n += 1
         path = os.path.join(out_dir, f"task_{n:03d}_{tf_id}.json")
-        with open(path, "w", encoding="utf-8") as fp:
-            fp.write(packet.to_json())
+        tasks.append((path, packet.to_json()))
+    written: List[str] = []
+    for path, data in tasks:
+        Path(path).write_text(data, encoding="utf-8")
         written.append(path)
     return written
 
@@ -206,13 +211,14 @@ def _apply_patches_in(cwd: str, diffs: List[str]) -> Tuple[bool, str]:
     """
     logs: List[str] = []
     for i, diff in enumerate(diffs, 1):
-        patch_path = os.path.join(cwd, f".hdae.patch.{i}.diff")
-        with open(patch_path, "w", encoding="utf-8") as fp:
-            fp.write(diff)
         try:
-            _git("apply", "--check", patch_path, cwd=cwd)
-            _git("apply", patch_path, cwd=cwd)
-            logs.append(f"applied: {os.path.basename(patch_path)}")
+            subprocess.run([
+                "git",
+                "apply",
+                "--check",
+            ], cwd=cwd, text=True, input=diff, check=True, capture_output=True)
+            subprocess.run(["git", "apply"], cwd=cwd, text=True, input=diff, check=True, capture_output=True)
+            logs.append(f"applied diff {i}")
         except subprocess.CalledProcessError as e:
             logs.append(e.stdout or "")
             logs.append(e.stderr or "")
@@ -277,8 +283,7 @@ def ingest_diffs(from_dir: str) -> Dict[str, int]:
                 if os.path.isfile(src):
                     os.makedirs(os.path.dirname(dst), exist_ok=True)
                     try:
-                        with open(src, "rb") as fsrc, open(dst, "wb") as fdst:
-                            fdst.write(fsrc.read())
+                        shutil.copyfile(src, dst)
                     except OSError as e:
                         LOG.debug("agent_bridge: overlay copy failed for %s: %s", rel, e)
         except subprocess.CalledProcessError as e:
@@ -288,8 +293,7 @@ def ingest_diffs(from_dir: str) -> Dict[str, int]:
             for rel, content in new_files:
                 dst = os.path.join(tmp, rel)
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
-                with open(dst, "w", encoding="utf-8") as fp:
-                    fp.write(content)
+                Path(dst).write_text(content, encoding="utf-8")
             ok, _log = _apply_patches_in(tmp, apply_diffs)
             if not ok:
                 _waive_for_diffs(all_diffs, reason="patch apply failed in worktree")
@@ -317,13 +321,11 @@ def ingest_diffs(from_dir: str) -> Dict[str, int]:
                     os.makedirs(os.path.dirname(dst), exist_ok=True)
                     current: str | None = None
                     try:
-                        with open(dst, "r", encoding="utf-8") as fp:
-                            current = fp.read()
+                        current = Path(dst).read_text(encoding="utf-8")
                     except OSError:
                         current = None
                     if current != content:
-                        with open(dst, "w", encoding="utf-8") as fp:
-                            fp.write(content)
+                        Path(dst).write_text(content, encoding="utf-8")
                         accepted += 1
                 accepted += _accept_into_main(apply_diffs)
                 _git("worktree", "remove", "--force", tmp)
@@ -341,25 +343,31 @@ def ingest_diffs(from_dir: str) -> Dict[str, int]:
 def _accept_into_main(diffs: List[str]) -> int:
     """Apply diffs to the main working tree idempotently. Returns count applied."""
     applied = 0
-    for i, diff in enumerate(diffs, 1):
-        patch_path = os.path.join(ROOT, f".hdae.accept.{i}.diff")
-        with open(patch_path, "w", encoding="utf-8") as fp:
-            fp.write(diff)
-        # Idempotency: if reverse-apply check succeeds, patch is already applied
+    for diff in diffs:
         already = False
         try:
-            _git("apply", "--reverse", "--check", patch_path, cwd=ROOT)
+            subprocess.run(
+                ["git", "apply", "--reverse", "--check"],
+                cwd=ROOT,
+                text=True,
+                input=diff,
+                check=True,
+                capture_output=True,
+            )
             already = True
         except subprocess.CalledProcessError:
             already = False
         if already:
             continue
-        _git("apply", patch_path, cwd=ROOT)
+        subprocess.run(
+            ["git", "apply"],
+            cwd=ROOT,
+            text=True,
+            input=diff,
+            check=True,
+            capture_output=True,
+        )
         applied += 1
-        try:
-            os.remove(patch_path)
-        except OSError as e:
-            LOG.debug("agent_bridge: remove patch temp failed: %s", e)
     return applied
 
 
