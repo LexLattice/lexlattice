@@ -55,6 +55,20 @@ Notes:
 - `make all` also runs an optional norm audit if present.
  - Imports are auto-sortable with `ruff` (run `ruff check --fix`).
 
+## Local parity
+
+Mirror CI checks before pushing a PR:
+
+```bash
+make ci-local PR_NUMBER=NN BASE_REF=main
+```
+
+Install pre-commit hooks:
+
+```bash
+make hooks
+```
+
 ## Agent Enforcers (H-DAE) ![H-DAE CI](https://github.com/LexLattice/lexlattice/actions/workflows/hdae.yml/badge.svg)
 
 This repo includes the skeleton for Hybrid Deterministic + Agent Enforcers:

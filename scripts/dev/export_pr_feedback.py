@@ -160,8 +160,8 @@ def main():
             print(f"Wrote {out_path}")
 
         if agg_f:
-            for e in entries:
-                row = {"repo": slug, "pr": pr, **e}
+            for entry in entries:
+                row = {"repo": slug, "pr": pr, **entry}
                 agg_f.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
     if agg_f:
