@@ -45,5 +45,7 @@ Lifecycle: scan → propose(auto) → agent(emit/ingest) → verify → commit |
   - Pipeline commands: `scan | propose | apply | verify`.
   - Idempotent transforms; deterministic outputs.
 - Add detectors/patchers for additional packs in later PRs.
+- YAML-015: replace yaml.load with yaml.safe_load (auto-fix; format-preserving; idempotent).
+- ERR-011: link causal chain via `raise ... from e` (auto-fix; format-preserving; idempotent).
 - Wire CI enforcement and agent bridge.
 - Expand schema and verification hooks as needed.

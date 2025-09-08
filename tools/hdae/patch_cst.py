@@ -6,6 +6,8 @@ Implements idempotent fixes for:
 - SIL-002: replace silent handler pass/continue with `raise`
 - MDA-003: mutable defaults → None + init
 - SUB-006: add check=True, text=True to subprocess.*; do not remove shell=True
+- ERR-011: link causal chain via `raise ... from e`
+- YAML-015: replace yaml.load with yaml.safe_load
 
 Uses ast to locate nodes and applies minimal text edits while preserving most
 formatting. All transforms are designed to be idempotent.
@@ -17,6 +19,15 @@ import ast
 import difflib
 from dataclasses import dataclass
 from typing import List, Tuple
+
+import libcst as cst
+
+PACK_BEX = "BEX-001"
+PACK_SIL = "SIL-002"
+PACK_MDA = "MDA-003"
+PACK_SUB = "SUB-006"
+PACK_ERR = "ERR-011"
+PACK_YAML = "YAML-015"
 
 
 ALLOWED_EXCS = (
@@ -252,10 +263,121 @@ def fix_sub(src: str, path: str) -> Tuple[str, str]:
     return out, _unified_diff(path, src, out) if out != src else ""
 
 
-def apply_all(src: str, path: str) -> Tuple[str, List[str]]:
+class YamlSafeLoadTransformer(cst.CSTTransformer):
+    def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.Call:
+        func = original_node.func
+        if (
+            isinstance(func, cst.Attribute)
+            and isinstance(func.value, cst.Name)
+            and func.value.value == "yaml"
+            and func.attr.value == "load"
+        ):
+            new_func = cst.Attribute(value=func.value, attr=cst.Name("safe_load"), dot=func.dot)
+            new_args = [
+                arg
+                for arg in updated_node.args
+                if not (
+                    arg.keyword
+                    and isinstance(arg.keyword, cst.Name)
+                    and arg.keyword.value == "Loader"
+                )
+            ]
+            if new_args and new_args[-1].comma is not None:
+                new_args[-1] = new_args[-1].with_changes(comma=None)
+            return updated_node.with_changes(func=new_func, args=new_args)
+        return updated_node
+
+
+def fix_yaml(src: str, path: str) -> Tuple[str, str]:
+    try:
+        mod = cst.parse_module(src)
+    except Exception:
+        return src, ""
+    new_mod = mod.visit(YamlSafeLoadTransformer())
+    out = new_mod.code
+    return out, _unified_diff(path, src, out) if out != src else ""
+
+
+class Err011AddCause(cst.CSTTransformer):
+    def __init__(self) -> None:
+        self._aliases: List[str | None] = []
+        self._inner: List[int] = []
+
+    def visit_ExceptHandler(self, node: cst.ExceptHandler) -> None:  # noqa: D401
+        alias: str | None = None
+        nm = node.name
+        if nm is not None and isinstance(nm.name, cst.Name):
+            alias = nm.name.value
+        self._aliases.append(alias)
+        self._inner.append(0)
+
+    def leave_ExceptHandler(
+        self, original_node: cst.ExceptHandler, updated_node: cst.ExceptHandler
+    ) -> cst.ExceptHandler:
+        self._aliases.pop()
+        self._inner.pop()
+        return updated_node
+
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> None:  # noqa: D401
+        if self._inner:
+            self._inner[-1] += 1
+
+    def leave_FunctionDef(
+        self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
+    ) -> cst.FunctionDef:
+        if self._inner:
+            self._inner[-1] -= 1
+        return updated_node
+
+    def visit_ClassDef(self, node: cst.ClassDef) -> None:  # noqa: D401
+        if self._inner:
+            self._inner[-1] += 1
+
+    def leave_ClassDef(
+        self, original_node: cst.ClassDef, updated_node: cst.ClassDef
+    ) -> cst.ClassDef:
+        if self._inner:
+            self._inner[-1] -= 1
+        return updated_node
+
+    def leave_Raise(self, original_node: cst.Raise, updated_node: cst.Raise) -> cst.Raise:
+        if (
+            self._aliases
+            and self._aliases[-1]
+            and self._inner[-1] == 0
+            and original_node.exc is not None
+            and original_node.cause is None
+        ):
+            return updated_node.with_changes(cause=cst.From(item=cst.Name(self._aliases[-1])))
+        return updated_node
+
+
+def fix_err(src: str, path: str) -> Tuple[str, str]:
+    try:
+        mod = cst.parse_module(src)
+    except Exception:
+        return src, ""
+    new_mod = mod.visit(Err011AddCause())
+    out = new_mod.code
+    return out, _unified_diff(path, src, out) if out != src else ""
+
+
+FIXERS = [
+    (PACK_BEX, fix_bex),
+    (PACK_SIL, fix_sil),
+    (PACK_MDA, fix_mda),
+    (PACK_SUB, fix_sub),
+    (PACK_ERR, fix_err),
+    (PACK_YAML, fix_yaml),
+]
+
+
+def apply_all(src: str, path: str, packs: set[str] | None = None) -> Tuple[str, List[str]]:
     diffs: List[str] = []
     curr = src
-    for fixer in (fix_bex, fix_sil, fix_mda, fix_sub):
+    for pack, fixer in FIXERS:
+        if packs is not None and pack not in packs:
+            continue
         nxt, diff = fixer(curr, path)
         if diff:
             diffs.append(diff)
