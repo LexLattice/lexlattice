@@ -121,3 +121,12 @@ make hdae-agent-emit
 # ingest proposed diffs from an agent (unified patches)
 make hdae-agent-ingest  # defaults to .hdae/diffs
 ```
+
+Generate task packets for suggest-only packs:
+
+```bash
+python -m tools.hdae.cli scan --packs SQL-007 | \
+python -m tools.hdae.cli agent emit --packs SQL-007
+```
+
+Packets land under `.hdae/tasks/<PACK>-<N>.json`.
