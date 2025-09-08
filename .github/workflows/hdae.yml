@@ -7,8 +7,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
   issues: write
+  pull-requests: write
 
 jobs:
   preflight:
@@ -53,11 +53,12 @@ jobs:
           CI_ALLOW_PR_COMMENT: '1'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: scripts/ci/hdae_ci.sh comment
-      - name: Collect artifacts
-        if: always()
-        run: scripts/ci/hdae_ci.sh artifacts
-      - name: Archive artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: hdae-artifacts
-          path: .hdae-artifacts
+        - name: Upload failure artifacts
+          if: failure()
+          uses: actions/upload-artifact@v4
+          with:
+            name: hdae-artifacts
+            path: |
+              scan.jsonl
+              hdae-diff.tar
+              pytest-report.xml
